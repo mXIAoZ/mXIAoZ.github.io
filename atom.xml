@@ -6,7 +6,7 @@
   <link href="http://wazhb.com/atom.xml" rel="self"/>
   
   <link href="http://wazhb.com/"/>
-  <updated>2021-04-10T05:46:47.614Z</updated>
+  <updated>2021-04-12T07:10:16.937Z</updated>
   <id>http://wazhb.com/</id>
   
   <author>
@@ -21,7 +21,7 @@
     <link href="http://wazhb.com/2021/04/10/hello-world/"/>
     <id>http://wazhb.com/2021/04/10/hello-world/</id>
     <published>2021-04-10T05:46:47.614Z</published>
-    <updated>2021-04-10T05:46:47.614Z</updated>
+    <updated>2021-04-12T07:10:16.937Z</updated>
     
     
       
@@ -34,6 +34,10 @@
     
     
     
+    <category term="test" scheme="http://wazhb.com/categories/test/"/>
+    
+    
+    <category term="try" scheme="http://wazhb.com/tags/try/"/>
     
   </entry>
   
