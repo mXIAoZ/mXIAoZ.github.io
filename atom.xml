@@ -1,0 +1,180 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>Zhi Wang の Blogs</title>
+  
+  <subtitle>尝试写博客の小白</subtitle>
+  <link href="http://wazhb.com/atom.xml" rel="self"/>
+  
+  <link href="http://wazhb.com/"/>
+  <updated>2024-05-25T15:13:53.528Z</updated>
+  <id>http://wazhb.com/</id>
+  
+  <author>
+    <name>Zhi Wang</name>
+    
+  </author>
+  
+  <generator uri="https://hexo.io/">Hexo</generator>
+  
+  <entry>
+    <title>年中杂谈</title>
+    <link href="http://wazhb.com/2023/07/02/%E5%B9%B4%E4%B8%AD%E6%9D%82%E8%B0%88/"/>
+    <id>http://wazhb.com/2023/07/02/%E5%B9%B4%E4%B8%AD%E6%9D%82%E8%B0%88/</id>
+    <published>2023-07-02T14:55:28.000Z</published>
+    <updated>2024-05-25T15:13:53.528Z</updated>
+    
+    
+      
+      
+        
+        
+    <summary type="html">&lt;h1 id=&quot;杂谈&quot;&gt;&lt;a href=&quot;#杂谈&quot; class=&quot;headerlink&quot;</summary>
+        
+      
+    
+    
+    
+    <category term="Summary,Gossip" scheme="http://wazhb.com/categories/Summary-Gossip/"/>
+    
+    <category term="Mid-year summary" scheme="http://wazhb.com/categories/Summary-Gossip/Mid-year-summary/"/>
+    
+    
+    <category term="总结，杂谈" scheme="http://wazhb.com/tags/%E6%80%BB%E7%BB%93%EF%BC%8C%E6%9D%82%E8%B0%88/"/>
+    
+  </entry>
+  
+  <entry>
+    <title>How to think about psychology 11-12</title>
+    <link href="http://wazhb.com/2021/06/02/How-to-think-about-psychology-11-12/"/>
+    <id>http://wazhb.com/2021/06/02/How-to-think-about-psychology-11-12/</id>
+    <published>2021-06-02T14:26:23.000Z</published>
+    <updated>2024-05-25T15:13:53.528Z</updated>
+    
+    
+    <summary type="html">&lt;h1 id=&quot;这才是心理学（11-12）How-to-think-about-psychology&quot;&gt;&lt;a href=&quot;#这才是心理学（11-12）How-to-think-about-psychology&quot; class=&quot;headerlink&quot; title=&quot;这才是心理学（11-12）How to think about psychology&quot;&gt;&lt;/a&gt;这才是心理学（11-12）How to think about psychology&lt;/h1&gt;&lt;p&gt;&amp;emsp;接近一周的对于这本心理学入门的书籍进行的笔记也结束了，后续会针对整本书进行一个总结和回顾吧。&lt;/p&gt;
+&lt;h2 id=&quot;第十一章-偶然性&quot;&gt;&lt;a href=&quot;#第十一章-偶然性&quot; class=&quot;headerlink&quot; title=&quot;第十一章 偶然性&quot;&gt;&lt;/a&gt;第十一章 偶然性&lt;/h2&gt;&lt;p&gt;&amp;emsp;本章继续第10章介绍的概率，单独将概率中的偶然性拿出来进行讨论。&lt;/p&gt;
+&lt;p&gt;&amp;emsp;首先，作者介绍了人们为什么对偶然性执迷不悟，同时指出偶然性的危害。&lt;/p&gt;
+&lt;p&gt;&amp;emsp;人类大脑的进化方式，使得人类不懈地寻求世界中的各种模式，这也是人类智力的特征，促使了人类在信息处理和知识获取方面取得了辉煌的成就。但是，这种对于偶然性解释的进化，有时也会产生不好的效果。如一些金融分析师试图对每一次股市价格的微小波动做出解释，但是这种波动大部分情况下都是随机的，他们的执着于解释这些是为了让人们相信他们可以打败市场。同时即使有些人真的预测到一些变化，这种预测也是不可靠的。简单来说，假设将预测分为下跌和上涨两种情况，有1000人对第一次变化进行了预测，那么就会有500人可以对这次变化成功预测，这500人接着对第二次变化进行了预测，那么就会有250人对第二次变化成功预测，直到进行到第四次预测，那么仍然会有60人左右连着预测正确四次。因此，从概率上来说，总会有人在接下来的预测取得了成功，但是这些是不可靠的。&lt;/p&gt;</summary>
+    
+    
+    
+    <category term="Psychology" scheme="http://wazhb.com/categories/Psychology/"/>
+    
+    <category term="How to think about psychology" scheme="http://wazhb.com/categories/Psychology/How-to-think-about-psychology/"/>
+    
+    
+    <category term="读书笔记" scheme="http://wazhb.com/tags/%E8%AF%BB%E4%B9%A6%E7%AC%94%E8%AE%B0/"/>
+    
+    <category term="心理学" scheme="http://wazhb.com/tags/%E5%BF%83%E7%90%86%E5%AD%A6/"/>
+    
+    <category term="这才是心理学" scheme="http://wazhb.com/tags/%E8%BF%99%E6%89%8D%E6%98%AF%E5%BF%83%E7%90%86%E5%AD%A6/"/>
+    
+  </entry>
+  
+  <entry>
+    <title>How to think about psychology 8-10</title>
+    <link href="http://wazhb.com/2021/06/01/How-to-think-about-psychology-8-10/"/>
+    <id>http://wazhb.com/2021/06/01/How-to-think-about-psychology-8-10/</id>
+    <published>2021-06-01T14:12:12.000Z</published>
+    <updated>2024-05-25T15:13:53.528Z</updated>
+    
+    
+    <summary type="html">&lt;h1 id=&quot;这才是心理学（8-10）How-to-think-about-psychology&quot;&gt;&lt;a href=&quot;#这才是心理学（8-10）How-to-think-about-psychology&quot; class=&quot;headerlink&quot; title=&quot;这才是心理学（8-10）How to think about psychology&quot;&gt;&lt;/a&gt;这才是心理学（8-10）How to think about psychology&lt;/h1&gt;&lt;h2 id=&quot;第八章-关联性和聚合性&quot;&gt;&lt;a href=&quot;#第八章-关联性和聚合性&quot; class=&quot;headerlink&quot; title=&quot;第八章 关联性和聚合性&quot;&gt;&lt;/a&gt;第八章 关联性和聚合性&lt;/h2&gt;&lt;p&gt;&amp;emsp;爱因斯坦综合征：认为所有科学的进步都符合“飞跃”模式，就像爱因斯坦对物理学做出的贡献一样。&lt;/p&gt;
+&lt;p&gt;&amp;emsp;关联性原则：一个新的科学理论，必须与先前已经确定的实证事实所关联，即兼容旧的事实。即使是爱因斯坦理论中存在许多概念重构，其在低俗运动情况下的解释也和牛顿理论所做的预测基本相同。我们需要警惕一些伪科学中违反了关联性原则，即声称先前的数据结论不相关。很多科学领域的进步靠的不是单一的突破，而是一系列难以描述的时断时续的过程。&lt;/p&gt;
+&lt;p&gt;&amp;emsp;聚合性原则：在没有一个单独的实验可以帮助一锤定音，而是每个实验都至少帮助排除一些替代解释。可以从实验局限性和理论检验的角度分别理解聚合性原则。&lt;/p&gt;</summary>
+    
+    
+    
+    <category term="Psychology" scheme="http://wazhb.com/categories/Psychology/"/>
+    
+    <category term="How to think about psychology" scheme="http://wazhb.com/categories/Psychology/How-to-think-about-psychology/"/>
+    
+    
+    <category term="读书笔记" scheme="http://wazhb.com/tags/%E8%AF%BB%E4%B9%A6%E7%AC%94%E8%AE%B0/"/>
+    
+    <category term="心理学" scheme="http://wazhb.com/tags/%E5%BF%83%E7%90%86%E5%AD%A6/"/>
+    
+    <category term="这才是心理学" scheme="http://wazhb.com/tags/%E8%BF%99%E6%89%8D%E6%98%AF%E5%BF%83%E7%90%86%E5%AD%A6/"/>
+    
+  </entry>
+  
+  <entry>
+    <title>How to think about psychology 5-7</title>
+    <link href="http://wazhb.com/2021/05/31/How-to-think-about-psychology-5-7/"/>
+    <id>http://wazhb.com/2021/05/31/How-to-think-about-psychology-5-7/</id>
+    <published>2021-05-31T08:58:54.000Z</published>
+    <updated>2024-05-25T15:13:53.528Z</updated>
+    
+    
+    <summary type="html">&lt;h1 id=&quot;这才是心理学（5-7）How-to-think-about-psychology&quot;&gt;&lt;a href=&quot;#这才是心理学（5-7）How-to-think-about-psychology&quot; class=&quot;headerlink&quot; title=&quot;这才是心理学（5-7）How to think about psychology&quot;&gt;&lt;/a&gt;这才是心理学（5-7）How to think about psychology&lt;/h1&gt;&lt;h2 id=&quot;第五章-相关性与因果关系问题&quot;&gt;&lt;a href=&quot;#第五章-相关性与因果关系问题&quot; class=&quot;headerlink&quot; title=&quot;第五章 相关性与因果关系问题&quot;&gt;&lt;/a&gt;第五章 相关性与因果关系问题&lt;/h2&gt;&lt;p&gt;&amp;emsp;本章主要向读者解释两个变量具有相关性并不表示这两个变量存在因果关系。&lt;/p&gt;
+&lt;p&gt;&amp;emsp;第三变量的存在会使两个变量之间产生误导性关联，这种第三变量有时候并不是很容易分辨。在“使用“烤箱法”避孕”这个案列中，可以很清楚的意识到由于经济水平的不同，导致了使用的避孕方法/工具的不同，从而影响到避孕效果，然而经济水平较高的家庭中往往会有一些高级家具如烤箱等，因此烤箱和避孕在调查中虽然显示了一定的联系，但是第三变量的存在（经济水平）才是正确的因果关系。当一些因果关系在常识看来是显而易见时，或者当我们带着强烈的预设偏见或者我们的理论取向支配了我们对现象的解释时，相关性很容易被视为因果关系的证据。&lt;/p&gt;</summary>
+    
+    
+    
+    <category term="Psychology" scheme="http://wazhb.com/categories/Psychology/"/>
+    
+    <category term="How to think about psychology" scheme="http://wazhb.com/categories/Psychology/How-to-think-about-psychology/"/>
+    
+    
+    <category term="读书笔记" scheme="http://wazhb.com/tags/%E8%AF%BB%E4%B9%A6%E7%AC%94%E8%AE%B0/"/>
+    
+    <category term="心理学" scheme="http://wazhb.com/tags/%E5%BF%83%E7%90%86%E5%AD%A6/"/>
+    
+    <category term="这才是心理学" scheme="http://wazhb.com/tags/%E8%BF%99%E6%89%8D%E6%98%AF%E5%BF%83%E7%90%86%E5%AD%A6/"/>
+    
+  </entry>
+  
+  <entry>
+    <title>How to think about psychology-3-4</title>
+    <link href="http://wazhb.com/2021/05/28/How-to-think-about-psychology-3-4/"/>
+    <id>http://wazhb.com/2021/05/28/How-to-think-about-psychology-3-4/</id>
+    <published>2021-05-28T14:44:59.000Z</published>
+    <updated>2024-05-25T15:13:53.528Z</updated>
+    
+    
+    <summary type="html">&lt;h1 id=&quot;这才是心理学（2-3）How-to-think-about-psychology&quot;&gt;&lt;a href=&quot;#这才是心理学（2-3）How-to-think-about-psychology&quot; class=&quot;headerlink&quot; title=&quot;这才是心理学（2-3）How to think about psychology&quot;&gt;&lt;/a&gt;这才是心理学（2-3）How to think about psychology&lt;/h1&gt;&lt;h2 id=&quot;第三章-操作主义与本质主义&quot;&gt;&lt;a href=&quot;#第三章-操作主义与本质主义&quot; class=&quot;headerlink&quot; title=&quot;第三章 操作主义与本质主义&quot;&gt;&lt;/a&gt;第三章 操作主义与本质主义&lt;/h2&gt;&lt;p&gt;&amp;emsp;操作主义是指科学理论的概念必须以某种方式建立在可观察事件的基础之上，或与之相关联，而这种可观察时间是可以被测量的。&lt;/p&gt;
+&lt;p&gt;&amp;emsp;本质主义认为只有从内在本质或者本质的属性对现象做出终极的解释的理论，才是好的科学理论。&lt;/p&gt;
+&lt;p&gt;&amp;emsp;科学家为操作主义者而不是本质主义者，因为他们并不尝试去回答任何关于“本质”的问题，同时这也不是科学本来面目，科学的独特优势提供一种消除错误的方法，这些错误是我们知识库中的一部分。如果将饥饿定义为“胃里的啃咬感”，这不是操作性的定义，因为其不可测量，而将其定义为可测量的食物消化时间或者一些血糖等生理指标，就是一种操作性的定义。科学中的概念是由一组操作定义的，这也促使我们更加全面地思考问题。我们需要培养对操作性定义的细节进行深究的习惯。&lt;/p&gt;</summary>
+    
+    
+    
+    <category term="Psychology" scheme="http://wazhb.com/categories/Psychology/"/>
+    
+    <category term="How to think about psychology" scheme="http://wazhb.com/categories/Psychology/How-to-think-about-psychology/"/>
+    
+    
+    <category term="读书笔记" scheme="http://wazhb.com/tags/%E8%AF%BB%E4%B9%A6%E7%AC%94%E8%AE%B0/"/>
+    
+    <category term="心理学" scheme="http://wazhb.com/tags/%E5%BF%83%E7%90%86%E5%AD%A6/"/>
+    
+    <category term="这才是心理学" scheme="http://wazhb.com/tags/%E8%BF%99%E6%89%8D%E6%98%AF%E5%BF%83%E7%90%86%E5%AD%A6/"/>
+    
+  </entry>
+  
+  <entry>
+    <title>How to think about psychology 1-2</title>
+    <link href="http://wazhb.com/2021/05/27/How-to-think-about-psychology-1-2/"/>
+    <id>http://wazhb.com/2021/05/27/How-to-think-about-psychology-1-2/</id>
+    <published>2021-05-27T13:23:22.000Z</published>
+    <updated>2024-05-25T15:13:53.527Z</updated>
+    
+    
+    <summary type="html">&lt;h1 id=&quot;这才是心理学（1-2）How-to-think-about-psychology&quot;&gt;&lt;a href=&quot;#这才是心理学（1-2）How-to-think-about-psychology&quot; class=&quot;headerlink&quot; title=&quot;这才是心理学（1-2）How to think about psychology&quot;&gt;&lt;/a&gt;这才是心理学（1-2）How to think about psychology&lt;/h1&gt;&lt;h2 id=&quot;第一章-心理学介绍&quot;&gt;&lt;a href=&quot;#第一章-心理学介绍&quot; class=&quot;headerlink&quot; title=&quot;第一章 心理学介绍&quot;&gt;&lt;/a&gt;第一章 心理学介绍&lt;/h2&gt;&lt;p&gt;&amp;emsp;心理学作为一门科学，研究的是人类以及动物的行为，并且依据研究对行为做出预测。作者认为心理学和其他科学一样，是基于数据的科学的研究，但是心理学相对于其他科学如物理学、化学等，是一门较为“年轻”的学科。&lt;/p&gt;
+&lt;p&gt;&amp;emsp;人们对于西格蒙德 &lt;script type=&quot;math/tex&quot;&gt;\cdot&lt;/script&gt; 佛洛伊德精神分析的“心理学理论”印象深刻，但是正如发展心理学家艾莉森 &lt;script type=&quot;math/tex&quot;&gt;\cdot&lt;/script&gt; 戈伯尼克所说佛罗伊徳理论是一种僵尸理论，它彻底误导了大众对于心理学徳印象。因为，其理论并不是建立在科学的研究之上得出的结论，而是依附于佛洛依德的个案研究以及自省。&lt;/p&gt;</summary>
+    
+    
+    
+    <category term="Psychology" scheme="http://wazhb.com/categories/Psychology/"/>
+    
+    <category term="How to think about psychology" scheme="http://wazhb.com/categories/Psychology/How-to-think-about-psychology/"/>
+    
+    
+    <category term="读书笔记" scheme="http://wazhb.com/tags/%E8%AF%BB%E4%B9%A6%E7%AC%94%E8%AE%B0/"/>
+    
+    <category term="心理学" scheme="http://wazhb.com/tags/%E5%BF%83%E7%90%86%E5%AD%A6/"/>
+    
+    <category term="这才是心理学" scheme="http://wazhb.com/tags/%E8%BF%99%E6%89%8D%E6%98%AF%E5%BF%83%E7%90%86%E5%AD%A6/"/>
+    
+  </entry>
+  
+</feed>
