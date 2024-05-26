@@ -6,7 +6,7 @@
   <link href="http://wazhb.com/atom.xml" rel="self"/>
   
   <link href="http://wazhb.com/"/>
-  <updated>2024-05-25T15:13:53.528Z</updated>
+  <updated>2024-05-26T09:40:00.187Z</updated>
   <id>http://wazhb.com/</id>
   
   <author>
@@ -15,6 +15,37 @@
   </author>
   
   <generator uri="https://hexo.io/">Hexo</generator>
+  
+  <entry>
+    <title>指令集基本原理</title>
+    <link href="http://wazhb.com/2024/05/26/20240526-%E6%8C%87%E4%BB%A4%E9%9B%86%E5%9F%BA%E6%9C%AC%E5%8E%9F%E7%90%86/"/>
+    <id>http://wazhb.com/2024/05/26/20240526-%E6%8C%87%E4%BB%A4%E9%9B%86%E5%9F%BA%E6%9C%AC%E5%8E%9F%E7%90%86/</id>
+    <published>2024-05-25T16:00:00.000Z</published>
+    <updated>2024-05-26T09:40:00.187Z</updated>
+    
+    
+    <summary type="html">&lt;h1 id=&quot;计算机体系结构背景&quot;&gt;&lt;a href=&quot;#计算机体系结构背景&quot; class=&quot;headerlink&quot; title=&quot;计算机体系结构背景&quot;&gt;&lt;/a&gt;计算机体系结构背景&lt;/h1&gt;&lt;p&gt;简单介绍一下，计算机体系结构主要是关于指令集的设计，从我们学习的各种编程语言出发，向上是各种应用的编写，向下是程序语言如何编译成计算机所能执行的二进制文件，这里就需要和指令集打交道。高级语言一般不涉及到内存和硬件，在编译过程中指令集的体系结构会起到相当大的影响，比如调用指令集的ADD方法，在不同的指令集中有不同的实现，包括是否使用寄存器，使用多少寄存器，这会影响到程序执行速度以及程序的大小，体系结构也是主要是指令集的设计。&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;p&gt;桌面计算机强调涉及整数和浮点数类型的程序性能，很少考虑程序规模。&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;&lt;p&gt;服务器主要用于数据库、文件服务器和WEB应用，浮点性能的重要性远低于整数和字符串。&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;&lt;p&gt;个人移动设备和嵌入式应用看中成本和消耗。&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;</summary>
+    
+    
+    
+    <category term="CAAQA" scheme="http://wazhb.com/categories/CAAQA/"/>
+    
+    <category term="CS" scheme="http://wazhb.com/categories/CAAQA/CS/"/>
+    
+    
+    <category term="CS" scheme="http://wazhb.com/tags/CS/"/>
+    
+    <category term="CAAQA" scheme="http://wazhb.com/tags/CAAQA/"/>
+    
+  </entry>
   
   <entry>
     <title>How to think about psychology 11-12</title>
