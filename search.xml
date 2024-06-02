@@ -154,7 +154,7 @@
   <entry>
     <title>指令集基本原理</title>
     <url>/2024/05/26/20240526-%E6%8C%87%E4%BB%A4%E9%9B%86%E5%9F%BA%E6%9C%AC%E5%8E%9F%E7%90%86/</url>
-    <content><![CDATA[<h1 id="计算机体系结构背景"><a href="#计算机体系结构背景" class="headerlink" title="计算机体系结构背景"></a>计算机体系结构背景</h1><p>简单介绍一下，计算机体系结构主要是关于指令集的设计，从我们学习的各种编程语言出发，向上是各种应用的编写，向下是程序语言如何编译成计算机所能执行的二进制文件，这里就需要和指令集打交道。高级语言一般不涉及到内存和硬件，在编译过程中指令集的体系结构会起到相当大的影响，比如调用指令集的ADD方法，在不同的指令集中有不同的实现，包括是否使用寄存器，使用多少寄存器，这会影响到程序执行速度以及程序的大小，体系结构也是主要是指令集的设计。</p>
+    <content><![CDATA[<h1 id="计算机体系结构背景"><a href="#计算机体系结构背景" class="headerlink" title="计算机体系结构背景"></a>计算机体系结构背景</h1><p>简单介绍一下，计算机体系结构狭义上是指关于指令集的设计（广义上的概念会在下一篇中定义），从我们学习的各种编程语言出发，向上是各种应用的编写，向下是程序语言如何编译成计算机所能执行的二进制文件，这里就需要和指令集打交道。高级语言一般不涉及到内存和硬件，在编译过程中指令集的体系结构会起到相当大的影响，比如调用指令集的ADD方法，在不同的指令集中有不同的实现，包括是否使用寄存器，使用多少寄存器，这会影响到程序执行速度以及程序的大小，体系结构也是主要是指令集的设计。</p>
 <ul>
 <li><p>桌面计算机强调涉及整数和浮点数类型的程序性能，很少考虑程序规模。</p>
 </li>
@@ -230,6 +230,107 @@
       <tags>
         <tag>CS</tag>
         <tag>CAAQA</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>初识操作系统（启动区和初始化）</title>
+    <url>/2024/06/02/%E5%88%9D%E8%AF%86%E6%93%8D%E4%BD%9C%E7%B3%BB%E7%BB%9F/</url>
+    <content><![CDATA[<h1 id="初识操作系统"><a href="#初识操作系统" class="headerlink" title="初识操作系统"></a>初识操作系统</h1><h2 id="工具介绍"><a href="#工具介绍" class="headerlink" title="工具介绍"></a>工具介绍</h2><ul>
+<li><p>GCC: GNU Compiler Collection, 可以编译多语言的编译器。编译流程：预处理-&gt;编译-&gt;汇编-&gt;链接。</p>
+<ul>
+<li><p>参考：</p>
+<p>介绍：<a href="https://www.cnblogs.com/QG-whz/p/5456720.html">https://www.cnblogs.com/QG-whz/p/5456720.html</a></p>
+<p>GCC官网：<a href="https://gcc.gnu.org/onlinedocs/gcc/index.html">https://gcc.gnu.org/onlinedocs/gcc/index.html</a></p>
+</li>
+</ul>
+</li>
+</ul>
+<ul>
+<li><p>NASM：NASM是一个为可移植性与模块化而设计的一个80x86的汇编器。文件格式为 xx.asm</p>
+<ul>
+<li><p>参考：</p>
+<p>官方手册：<a href="https://www.nasm.us/xdoc/2.16.03/html/nasmdoc0.html">https://www.nasm.us/xdoc/2.16.03/html/nasmdoc0.html</a></p>
+</li>
+</ul>
+</li>
+<li><p>QEMU: 一个开源的计算机仿真器和虚拟器。可以模拟不同架构的处理器（arm、x86、risc-v），也可以作为虚拟机使用</p>
+<ul>
+<li><p>参考：</p>
+<p>官方文档：<a href="https://www.qemu.org/docs/master/about/index.html">https://www.qemu.org/docs/master/about/index.html</a></p>
+</li>
+</ul>
+</li>
+<li><p>MAKEFILE: 批处理工具，可以通过其指定如何编译链接文件</p>
+<ul>
+<li>参考：<a href="http://makefiletutorial.foofun.cn/#%E6%9C%89%E4%BB%80%E4%B9%88%E6%9B%BF%E4%BB%A3%E6%96%B9%E6%A1%88%EF%BC%9F">http://makefiletutorial.foofun.cn/#%E6%9C%89%E4%BB%80%E4%B9%88%E6%9B%BF%E4%BB%A3%E6%96%B9%E6%A1%88%EF%BC%9F</a> </li>
+</ul>
+</li>
+</ul>
+<span id="more"></span>
+<h2 id="寄存器介绍"><a href="#寄存器介绍" class="headerlink" title="寄存器介绍"></a>寄存器介绍</h2><p>介绍在8086中存在的寄存器。</p>
+<p>通用寄存器：</p>
+<ul>
+<li>AX，accumulator，累加寄存器</li>
+<li>CX，counter，计数寄存器</li>
+<li>DX，data，数据寄存器</li>
+<li>BX，base，基址寄存器</li>
+</ul>
+<p>X表示extend，因为之前的寄存器都是8位的。因此8位寄存器有：AL，AH，CL，CH，DL，DH，BL，BH。</p>
+<p>另外32位通用寄存器为：EAX，ECX，EBX，EDX。</p>
+<hr>
+<p>索引寄存器，包含段地址的偏移量：</p>
+<ul>
+<li>SP，stack pointer，栈指针寄存器</li>
+<li>BP，base pointer，基址指针寄存器</li>
+<li>SI，source index，源变址寄存器</li>
+<li>DI，destination index，目的变址寄存器</li>
+</ul>
+<p>32位索引寄存器为：ESP，EBP，ESI，EDI。</p>
+<hr>
+<p>段寄存器，作程序指令，数据或栈的基础位置：</p>
+<ul>
+<li>CS，code segment，代码段寄存器</li>
+<li>SS，stack segment，栈段寄存器</li>
+<li>DS，data segment，数据段寄存器</li>
+<li>ES，extra segment，附加段寄存器</li>
+<li>FS，segment part2，没用名称</li>
+<li>GS，segment part3， 没有名称</li>
+</ul>
+<hr>
+<p>状态和控制寄存器：</p>
+<ul>
+<li>IP，instruction pointer，指令指针寄存器，它是从 Code Segment 代码寄存器处的偏移来存储执行的下一条指令</li>
+<li>FLAG : Flag 寄存器用于存储当前进程的状态</li>
+</ul>
+<h2 id="启动区介绍-bootloader"><a href="#启动区介绍-bootloader" class="headerlink" title="启动区介绍(bootloader)"></a>启动区介绍(bootloader)</h2><figure class="highlight x86asm"><table><tr><td class="code"><pre><span class="line">CYLS   <span class="built_in">EQU</span>   <span class="number">10</span></span><br><span class="line"><span class="symbol">entry:</span></span><br><span class="line">  <span class="keyword">MOV</span>   <span class="built_in">AX</span>, <span class="number">0</span>             <span class="comment">; 初始化寄存器</span></span><br><span class="line">  <span class="keyword">MOV</span>   <span class="built_in">SS</span>, <span class="built_in">AX</span></span><br><span class="line">  <span class="keyword">MOV</span>   <span class="built_in">SP</span>, <span class="number">0x7c00</span>				<span class="comment">;https://wiki.osdev.org/Memory_Map_(x86)</span></span><br><span class="line">  <span class="keyword">MOV</span>   <span class="built_in">DS</span>, <span class="built_in">AX</span></span><br><span class="line"></span><br><span class="line"><span class="comment">; 读取硬盘</span></span><br><span class="line">  <span class="keyword">MOV</span>   <span class="built_in">AX</span>, <span class="number">0x0820</span></span><br><span class="line">  <span class="keyword">MOV</span>   <span class="built_in">ES</span>, <span class="built_in">AX</span></span><br><span class="line">  <span class="keyword">MOV</span>   <span class="number">CH</span>, <span class="number">0</span>             <span class="comment">; 柱面0</span></span><br><span class="line">  <span class="keyword">MOV</span>   <span class="number">DH</span>, <span class="number">0</span>             <span class="comment">; 磁头0</span></span><br><span class="line">  <span class="keyword">MOV</span>   <span class="built_in">CL</span>, <span class="number">2</span>             <span class="comment">; 扇区2，从第二个开始读，第一个默认读取</span></span><br><span class="line"></span><br><span class="line"><span class="symbol">readloop:</span></span><br><span class="line">  <span class="keyword">MOV</span>   <span class="built_in">SI</span>, <span class="number">0</span>             <span class="comment">; 记录失败次数的寄存器</span></span><br><span class="line"><span class="symbol">retry:</span></span><br><span class="line">  <span class="keyword">MOV</span>   <span class="number">AH</span>, <span class="number">0x02</span>          <span class="comment">; AH=0x02：读盘</span></span><br><span class="line">  <span class="keyword">MOV</span>   <span class="built_in">AL</span>, <span class="number">1</span>             <span class="comment">; 1个扇区</span></span><br><span class="line">  <span class="keyword">MOV</span>   <span class="built_in">BX</span>, <span class="number">0</span></span><br><span class="line">  <span class="keyword">MOV</span>   <span class="built_in">DL</span>, <span class="number">0x00</span>          <span class="comment">; A驱动器</span></span><br><span class="line">  <span class="keyword">INT</span>   <span class="number">0x13</span>              <span class="comment">; 调用磁盘BIOS</span></span><br><span class="line">  <span class="keyword">JNC</span>   next              <span class="comment">; 没出错跳转到next</span></span><br><span class="line"></span><br><span class="line">  <span class="keyword">ADD</span>   <span class="built_in">SI</span>, <span class="number">1</span>             <span class="comment">; 失败次数+1</span></span><br><span class="line">  <span class="keyword">CMP</span>   <span class="built_in">SI</span>, <span class="number">5</span>             <span class="comment">; 失败次数是否达到5次</span></span><br><span class="line">  <span class="keyword">JAE</span>   error             <span class="comment">; 失败次数达到5次跳转到error</span></span><br><span class="line">  <span class="keyword">MOV</span>   <span class="number">AH</span>, <span class="number">0x00</span></span><br><span class="line">  <span class="keyword">MOV</span>   <span class="built_in">DL</span>, <span class="number">0x00</span>          <span class="comment">; A驱动器</span></span><br><span class="line">  <span class="keyword">INT</span>   <span class="number">0x13</span>              <span class="comment">; 重置驱动器</span></span><br><span class="line">  <span class="keyword">JMP</span>   retry</span><br><span class="line"></span><br><span class="line"><span class="symbol">next:</span></span><br><span class="line">  <span class="keyword">MOV</span>   <span class="built_in">AX</span>, <span class="built_in">ES</span>            <span class="comment">; 把内存地址后移0x200，移动一个软盘的位置</span></span><br><span class="line">  <span class="keyword">ADD</span>   <span class="built_in">AX</span>, <span class="number">0x0020</span></span><br><span class="line">  <span class="keyword">MOV</span>   <span class="built_in">ES</span>, <span class="built_in">AX</span>            <span class="comment">; 实现ES += 0x0020的目的</span></span><br><span class="line"></span><br><span class="line">  <span class="comment">; 扇区范围 1～18</span></span><br><span class="line">  <span class="keyword">ADD</span>   <span class="built_in">CL</span>, <span class="number">1</span>             <span class="comment">; 扇区加1</span></span><br><span class="line">  <span class="keyword">CMP</span>   <span class="built_in">CL</span>, <span class="number">18</span>            <span class="comment">; 扇区是否达到18</span></span><br><span class="line">  <span class="keyword">JBE</span>   readloop          <span class="comment">; 小于等于18扇区则跳转到readloop</span></span><br><span class="line"></span><br><span class="line">  <span class="keyword">MOV</span>   <span class="built_in">CL</span>, <span class="number">1</span>             <span class="comment">; 恢复到扇区1</span></span><br><span class="line">  <span class="comment">; 磁头范围 0～1（正面0，反面1）</span></span><br><span class="line">  <span class="keyword">ADD</span>   <span class="number">DH</span>, <span class="number">1</span></span><br><span class="line">  <span class="keyword">CMP</span>   <span class="number">DH</span>, <span class="number">2</span></span><br><span class="line">  <span class="keyword">JB</span>    readloop          <span class="comment">; 磁头未达到2则跳转到readloop</span></span><br><span class="line"></span><br><span class="line">  <span class="keyword">MOV</span>   <span class="number">DH</span>, <span class="number">0</span></span><br><span class="line">  <span class="comment">; 柱面范围 0 ～ 79</span></span><br><span class="line">  <span class="keyword">ADD</span>   <span class="number">CH</span>, <span class="number">1</span></span><br><span class="line">  <span class="keyword">CMP</span>   <span class="number">CH</span>, CYLS</span><br><span class="line">  <span class="keyword">JB</span>    readloop          <span class="comment">; 读取指定数量的柱面，未达到CYLS则跳转readloop</span></span><br><span class="line"></span><br><span class="line"><span class="comment">; 读取完毕，跳转到haribote.sys执行</span></span><br><span class="line">  <span class="keyword">MOV</span>   [<span class="number">0x0ff0</span>], <span class="number">CH</span>      <span class="comment">; 记下IPL读了多远</span></span><br><span class="line">  <span class="keyword">JMP</span>   <span class="number">0xc200</span></span><br><span class="line"></span><br></pre></td></tr></table></figure>
+<p>初始化寄存器，其中0x7c00表示程序装载的位置，可以参考链接中的内存分布图，0x00007C00 — 0x00007DFF为启动区装载地址（IBM规定）。参考：<a href="https://www.glamenv-septzen.net/en/view/6">https://www.glamenv-septzen.net/en/view/6</a></p>
+<p>初始化之后为读盘操作，这里读了10个柱面，每个柱面18个扇区，2个磁头（1张软盘有80个柱面，2个磁头，18个扇区，一个扇区512字节），即C0-H0-S1 -&gt; C9-H1-S18，共180KB内容。INT指令为调用BIOS函数。</p>
+<p>整体地址：</p>
+<pre><code>+ 0x00007C00 -- 0x00007DFF：启动区状态地址
++ 0x000008000 -- 0x000008200：启动区内容，默认读取
++ 0x000008200 -- 0x00000E600：软盘剩下内容
+</code></pre><p>一般向一个空软盘保存文件时：</p>
+<ol>
+<li>文件名会写在0X002600以后的地方</li>
+<li>文件的内容会写在0X004200以后的地方</li>
+</ol>
+<p>因此磁盘的内容位于内存0X8000+0X4200=0XC200的地方，即最后的jump语句执行的地方。</p>
+<h2 id="初始化介绍"><a href="#初始化介绍" class="headerlink" title="初始化介绍"></a>初始化介绍</h2><figure class="highlight x86asm"><table><tr><td class="code"><pre><span class="line"><span class="comment">; 有关BOOT_INFO</span></span><br><span class="line">CYLS    <span class="built_in">EQU</span>   <span class="number">0x0ff0</span>      <span class="comment">; 设置启动区</span></span><br><span class="line">LEDS    <span class="built_in">EQU</span>   <span class="number">0x0ff1</span></span><br><span class="line">VMODE   <span class="built_in">EQU</span>   <span class="number">0x0ff2</span>      <span class="comment">; 关于颜色数目的信息，颜色的位数</span></span><br><span class="line">SCRNX   <span class="built_in">EQU</span>   <span class="number">0x0ff4</span>      <span class="comment">; 分辨率X</span></span><br><span class="line">SCRNY   <span class="built_in">EQU</span>   <span class="number">0x0ff6</span>      <span class="comment">; 分辨率Y</span></span><br><span class="line">VRAM    <span class="built_in">EQU</span>   <span class="number">0x0ff8</span>      <span class="comment">; 图像缓冲区的起始位置</span></span><br><span class="line"></span><br><span class="line"><span class="symbol">entry:</span></span><br><span class="line"><span class="comment">; 设置屏幕模式</span></span><br><span class="line">  <span class="keyword">MOV</span>   <span class="built_in">AL</span>, <span class="number">0x13</span>          <span class="comment">; VGA显卡，320x200x8 bit</span></span><br><span class="line">  <span class="keyword">MOV</span>   <span class="number">AH</span>, <span class="number">0x00</span></span><br><span class="line">  <span class="keyword">INT</span>   <span class="number">0x10</span> 							<span class="comment">; 调用bios</span></span><br><span class="line"></span><br><span class="line">  <span class="keyword">MOV</span>   <span class="built_in">BYTE</span> [VMODE], <span class="number">8</span>   <span class="comment">; 屏幕的模式</span></span><br><span class="line">  <span class="keyword">MOV</span>   <span class="built_in">WORD</span> [SCRNX], <span class="number">320</span></span><br><span class="line">  <span class="keyword">MOV</span>   <span class="built_in">WORD</span> [SCRNY], <span class="number">200</span></span><br><span class="line">  <span class="keyword">MOV</span>   <span class="built_in">DWORD</span> [VRAM], <span class="number">0x000a0000</span></span><br><span class="line"></span><br><span class="line"><span class="comment">; 用BIOS取得键盘上各种LED指示灯的状态</span></span><br><span class="line">  <span class="keyword">MOV</span>   <span class="number">AH</span>, <span class="number">0x02</span></span><br><span class="line">  <span class="keyword">INT</span>   <span class="number">0x16</span>              <span class="comment">; 键盘BIOS</span></span><br><span class="line">  <span class="keyword">MOV</span>   [LEDS], <span class="built_in">AL</span></span><br></pre></td></tr></table></figure>
+<p>将画面模式信息保存在内存里面，同时把像素数、颜色数、键盘信息保存在0x0ff0附近，从内存分布图上来看，这块没有被使用。</p>
+<p>参考BIOS设定：<a href="https://wiki.osdev.org/BIOS">https://wiki.osdev.org/BIOS</a></p>
+<h3 id="MAKEFILE详解："><a href="#MAKEFILE详解：" class="headerlink" title="MAKEFILE详解："></a>MAKEFILE详解：</h3><p>来源：<a href="https://github.com/ghosind/HariboteOS">https://github.com/ghosind/HariboteOS</a></p>
+<figure class="highlight stylus"><table><tr><td class="code"><pre><span class="line"></span><br><span class="line">AS		:= nasm</span><br><span class="line">CC		:= $(GCCPREFIX)gcc</span><br><span class="line">LD		:= $(GCCPREFIX)ld</span><br><span class="line"></span><br><span class="line">ipl<span class="selector-class">.bin</span>:</span><br><span class="line">	$(AS) -f bin ipl<span class="selector-class">.asm</span> -o ipl<span class="selector-class">.bin</span> -l ipl.lst</span><br><span class="line"></span><br><span class="line">asmhead<span class="selector-class">.bin</span>:</span><br><span class="line">	$(AS) -f elf asmhead<span class="selector-class">.asm</span> -o asmhead<span class="selector-class">.bin</span> -l asmhead.lst</span><br><span class="line"></span><br><span class="line">bootpack<span class="selector-class">.bin</span>:</span><br><span class="line">	$(CC) $(CFLAGS) -c bootpack<span class="selector-class">.c</span> -o bootpack.bin</span><br><span class="line"></span><br><span class="line">func<span class="selector-class">.bin</span>:</span><br><span class="line">	$(AS) -f elf func<span class="selector-class">.asm</span> -o func<span class="selector-class">.bin</span> -l func.lst</span><br><span class="line"></span><br><span class="line">haribote<span class="selector-class">.sys</span>: asmhead<span class="selector-class">.bin</span> bootpack<span class="selector-class">.bin</span> func.bin</span><br><span class="line">	$(LD) -m elf_i386 --oformat binary asmhead<span class="selector-class">.bin</span> bootpack<span class="selector-class">.bin</span> func<span class="selector-class">.bin</span> -o haribote<span class="selector-class">.sys</span> -T haribote.ld</span><br><span class="line"></span><br><span class="line">image: ipl<span class="selector-class">.bin</span> haribote.sys</span><br><span class="line">	<span class="selector-tag">dd</span> <span class="keyword">if</span>=/dev/zero of=$(IMG) bs=<span class="number">512</span> count=<span class="number">2880</span></span><br><span class="line">	<span class="selector-tag">dd</span> <span class="keyword">if</span>=ipl<span class="selector-class">.bin</span> of=$(IMG) bs=<span class="number">512</span> count=<span class="number">1</span> conv=notrunc</span><br><span class="line">	<span class="selector-tag">dd</span> <span class="keyword">if</span>=haribote<span class="selector-class">.sys</span> of=$(IMG) seek=<span class="number">33</span> bs=<span class="number">512</span> conv=notrunc （<span class="number">512</span>*<span class="number">33</span>=<span class="number">0</span>x4200）</span><br></pre></td></tr></table></figure>
+<p>gcc已经做好编译汇编的操作，在haribote.sys进行链接，最后用dd命令生成img文件。</p>
+<h2 id="Linux启动介绍"><a href="#Linux启动介绍" class="headerlink" title="Linux启动介绍"></a>Linux启动介绍</h2><p>内核启动过程：<a href="https://www.cnblogs.com/anywherego/p/18217546">https://www.cnblogs.com/anywherego/p/18217546</a></p>
+<p>启动区需要看grub源码～</p>
+]]></content>
+      <categories>
+        <category>30daysOS</category>
+        <category>CS</category>
+      </categories>
+      <tags>
+        <tag>CS</tag>
+        <tag>30daysOS</tag>
       </tags>
   </entry>
 </search>

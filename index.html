@@ -88,9 +88,9 @@
   <ul class="main-menu menu">
         <li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>Home</a></li>
         <li class="menu-item menu-item-about"><a href="/about/" rel="section"><i class="fa fa-user fa-fw"></i>About</a></li>
-        <li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>Tags<span class="badge">5</span></a></li>
-        <li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>Categories<span class="badge">4</span></a></li>
-        <li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>Archives<span class="badge">6</span></a></li>
+        <li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>Tags<span class="badge">6</span></a></li>
+        <li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>Categories<span class="badge">6</span></a></li>
+        <li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>Archives<span class="badge">7</span></a></li>
       <li class="menu-item menu-item-search">
         <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>Search
         </a>
@@ -162,20 +162,20 @@
       <div class="site-state-item site-state-posts">
           <a href="/archives/">
         
-          <span class="site-state-item-count">6</span>
+          <span class="site-state-item-count">7</span>
           <span class="site-state-item-name">posts</span>
         </a>
       </div>
       <div class="site-state-item site-state-categories">
             <a href="/categories/">
           
-        <span class="site-state-item-count">4</span>
+        <span class="site-state-item-count">6</span>
         <span class="site-state-item-name">categories</span></a>
       </div>
       <div class="site-state-item site-state-tags">
             <a href="/tags/">
           
-        <span class="site-state-item-count">5</span>
+        <span class="site-state-item-count">6</span>
         <span class="site-state-item-name">tags</span></a>
       </div>
   </nav>
@@ -225,6 +225,121 @@
   
 
   <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="">
+    <link itemprop="mainEntityOfPage" href="http://wazhb.com/2024/06/02/%E5%88%9D%E8%AF%86%E6%93%8D%E4%BD%9C%E7%B3%BB%E7%BB%9F/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/yan.jpg">
+      <meta itemprop="name" content="Zhi Wang">
+      <meta itemprop="description" content="回首向来萧瑟处<br>归去，也无风雨也无晴。">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Zhi Wang の Blogs">
+    </span>
+      <header class="post-header">
+        <h2 class="post-title" itemprop="name headline">
+          <a href="/2024/06/02/%E5%88%9D%E8%AF%86%E6%93%8D%E4%BD%9C%E7%B3%BB%E7%BB%9F/" class="post-title-link" itemprop="url">初识操作系统（启动区和初始化）</a>
+        </h2>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">Posted on</span>
+      
+
+      <time title="Created: 2024-06-02 00:00:00 / Modified: 20:55:34" itemprop="dateCreated datePublished" datetime="2024-06-02T00:00:00+08:00">2024-06-02</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">In</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/30daysOS/" itemprop="url" rel="index"><span itemprop="name">30daysOS</span></a>
+        </span>
+          , 
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/30daysOS/CS/" itemprop="url" rel="index"><span itemprop="name">CS</span></a>
+        </span>
+    </span>
+
+  
+</div>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+          <h1 id="初识操作系统"><a href="#初识操作系统" class="headerlink" title="初识操作系统"></a>初识操作系统</h1><h2 id="工具介绍"><a href="#工具介绍" class="headerlink" title="工具介绍"></a>工具介绍</h2><ul>
+<li><p>GCC: GNU Compiler Collection, 可以编译多语言的编译器。编译流程：预处理-&gt;编译-&gt;汇编-&gt;链接。</p>
+<ul>
+<li><p>参考：</p>
+<p>介绍：<a target="_blank" rel="noopener" href="https://www.cnblogs.com/QG-whz/p/5456720.html">https://www.cnblogs.com/QG-whz/p/5456720.html</a></p>
+<p>GCC官网：<a target="_blank" rel="noopener" href="https://gcc.gnu.org/onlinedocs/gcc/index.html">https://gcc.gnu.org/onlinedocs/gcc/index.html</a></p>
+</li>
+</ul>
+</li>
+</ul>
+<ul>
+<li><p>NASM：NASM是一个为可移植性与模块化而设计的一个80x86的汇编器。文件格式为 xx.asm</p>
+<ul>
+<li><p>参考：</p>
+<p>官方手册：<a target="_blank" rel="noopener" href="https://www.nasm.us/xdoc/2.16.03/html/nasmdoc0.html">https://www.nasm.us/xdoc/2.16.03/html/nasmdoc0.html</a></p>
+</li>
+</ul>
+</li>
+<li><p>QEMU: 一个开源的计算机仿真器和虚拟器。可以模拟不同架构的处理器（arm、x86、risc-v），也可以作为虚拟机使用</p>
+<ul>
+<li><p>参考：</p>
+<p>官方文档：<a target="_blank" rel="noopener" href="https://www.qemu.org/docs/master/about/index.html">https://www.qemu.org/docs/master/about/index.html</a></p>
+</li>
+</ul>
+</li>
+<li><p>MAKEFILE: 批处理工具，可以通过其指定如何编译链接文件</p>
+<ul>
+<li>参考：<a target="_blank" rel="noopener" href="http://makefiletutorial.foofun.cn/#%E6%9C%89%E4%BB%80%E4%B9%88%E6%9B%BF%E4%BB%A3%E6%96%B9%E6%A1%88%EF%BC%9F">http://makefiletutorial.foofun.cn/#%E6%9C%89%E4%BB%80%E4%B9%88%E6%9B%BF%E4%BB%A3%E6%96%B9%E6%A1%88%EF%BC%9F</a> </li>
+</ul>
+</li>
+</ul>
+          <!--noindex-->
+            <div class="post-button">
+              <a class="btn" href="/2024/06/02/%E5%88%9D%E8%AF%86%E6%93%8D%E4%BD%9C%E7%B3%BB%E7%BB%9F/#more" rel="contents">
+                Read more &raquo;
+              </a>
+            </div>
+          <!--/noindex-->
+        
+      
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+        <div class="post-eof"></div>
+      
+    </footer>
+  </article>
+</div>
+
+
+
+
+    
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="">
     <link itemprop="mainEntityOfPage" href="http://wazhb.com/2024/05/26/20240526-%E6%8C%87%E4%BB%A4%E9%9B%86%E5%9F%BA%E6%9C%AC%E5%8E%9F%E7%90%86/">
 
     <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
@@ -248,10 +363,16 @@
         <i class="far fa-calendar"></i>
       </span>
       <span class="post-meta-item-text">Posted on</span>
-      
 
-      <time title="Created: 2024-05-26 00:00:00 / Modified: 17:40:00" itemprop="dateCreated datePublished" datetime="2024-05-26T00:00:00+08:00">2024-05-26</time>
+      <time title="Created: 2024-05-26 00:00:00" itemprop="dateCreated datePublished" datetime="2024-05-26T00:00:00+08:00">2024-05-26</time>
     </span>
+      <span class="post-meta-item">
+        <span class="post-meta-item-icon">
+          <i class="far fa-calendar-check"></i>
+        </span>
+        <span class="post-meta-item-text">Edited on</span>
+        <time title="Modified: 2024-06-01 20:42:06" itemprop="dateModified" datetime="2024-06-01T20:42:06+08:00">2024-06-01</time>
+      </span>
     <span class="post-meta-item">
       <span class="post-meta-item-icon">
         <i class="far fa-folder"></i>
@@ -276,7 +397,7 @@
     
     
     <div class="post-body" itemprop="articleBody">
-          <h1 id="计算机体系结构背景"><a href="#计算机体系结构背景" class="headerlink" title="计算机体系结构背景"></a>计算机体系结构背景</h1><p>简单介绍一下，计算机体系结构主要是关于指令集的设计，从我们学习的各种编程语言出发，向上是各种应用的编写，向下是程序语言如何编译成计算机所能执行的二进制文件，这里就需要和指令集打交道。高级语言一般不涉及到内存和硬件，在编译过程中指令集的体系结构会起到相当大的影响，比如调用指令集的ADD方法，在不同的指令集中有不同的实现，包括是否使用寄存器，使用多少寄存器，这会影响到程序执行速度以及程序的大小，体系结构也是主要是指令集的设计。</p>
+          <h1 id="计算机体系结构背景"><a href="#计算机体系结构背景" class="headerlink" title="计算机体系结构背景"></a>计算机体系结构背景</h1><p>简单介绍一下，计算机体系结构狭义上是指关于指令集的设计（广义上的概念会在下一篇中定义），从我们学习的各种编程语言出发，向上是各种应用的编写，向下是程序语言如何编译成计算机所能执行的二进制文件，这里就需要和指令集打交道。高级语言一般不涉及到内存和硬件，在编译过程中指令集的体系结构会起到相当大的影响，比如调用指令集的ADD方法，在不同的指令集中有不同的实现，包括是否使用寄存器，使用多少寄存器，这会影响到程序执行速度以及程序的大小，体系结构也是主要是指令集的设计。</p>
 <ul>
 <li><p>桌面计算机强调涉及整数和浮点数类型的程序性能，很少考虑程序规模。</p>
 </li>
