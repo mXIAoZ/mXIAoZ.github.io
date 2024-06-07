@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "settings": {
+    "ribbonState": {
+      "core.search": {
+        "visible": true,
+        "order": 0
+      },
+      "core.file-explorer": {
+        "visible": true,
+        "order": 1
+      },
+      "core.outline": {
+        "visible": true,
+        "order": 2
+      }
+    }
+  }
+}
