@@ -90,7 +90,7 @@
         <li class="menu-item menu-item-about"><a href="/about/" rel="section"><i class="fa fa-user fa-fw"></i>About</a></li>
         <li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>Tags<span class="badge">6</span></a></li>
         <li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>Categories<span class="badge">6</span></a></li>
-        <li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>Archives<span class="badge">7</span></a></li>
+        <li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>Archives<span class="badge">8</span></a></li>
       <li class="menu-item menu-item-search">
         <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>Search
         </a>
@@ -162,7 +162,7 @@
       <div class="site-state-item site-state-posts">
           <a href="/archives/">
         
-          <span class="site-state-item-count">7</span>
+          <span class="site-state-item-count">8</span>
           <span class="site-state-item-name">posts</span>
         </a>
       </div>
@@ -225,7 +225,7 @@
   
 
   <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="">
-    <link itemprop="mainEntityOfPage" href="http://wazhb.com/2024/06/02/%E5%88%9D%E8%AF%86%E6%93%8D%E4%BD%9C%E7%B3%BB%E7%BB%9F/">
+    <link itemprop="mainEntityOfPage" href="http://wazhb.com/2024/06/23/IDT&GDT/">
 
     <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
       <meta itemprop="image" content="/images/yan.jpg">
@@ -238,7 +238,7 @@
     </span>
       <header class="post-header">
         <h2 class="post-title" itemprop="name headline">
-          <a href="/2024/06/02/%E5%88%9D%E8%AF%86%E6%93%8D%E4%BD%9C%E7%B3%BB%E7%BB%9F/" class="post-title-link" itemprop="url">初识操作系统（启动区和初始化）</a>
+          <a href="/2024/06/23/IDT&GDT/" class="post-title-link" itemprop="url">中断设置和键鼠处理</a>
         </h2>
 
         <div class="post-meta-container">
@@ -250,7 +250,7 @@
       <span class="post-meta-item-text">Posted on</span>
       
 
-      <time title="Created: 2024-06-02 00:00:00 / Modified: 20:55:34" itemprop="dateCreated datePublished" datetime="2024-06-02T00:00:00+08:00">2024-06-02</time>
+      <time title="Created: 2024-06-23 00:00:00 / Modified: 19:31:32" itemprop="dateCreated datePublished" datetime="2024-06-23T00:00:00+08:00">2024-06-23</time>
     </span>
     <span class="post-meta-item">
       <span class="post-meta-item-icon">
@@ -276,7 +276,100 @@
     
     
     <div class="post-body" itemprop="articleBody">
-          <h1 id="初识操作系统"><a href="#初识操作系统" class="headerlink" title="初识操作系统"></a>初识操作系统</h1><h2 id="工具介绍"><a href="#工具介绍" class="headerlink" title="工具介绍"></a>工具介绍</h2><ul>
+          <h2 id="VGA-设定"><a href="#VGA-设定" class="headerlink" title="VGA 设定"></a>VGA 设定</h2><p>首先简单看待调色板设定的相关程序，具体可以参考下面的链接：</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">set_palette</span><span class="params">(<span class="keyword">int</span> start, <span class="keyword">int</span> end, <span class="keyword">unsigned</span> <span class="keyword">char</span> *rgb)</span> </span>&#123;</span><br><span class="line">  <span class="keyword">int</span> eflags = io_load_eflags(); <span class="comment">// 记录标志</span></span><br><span class="line"></span><br><span class="line">  io_cli(); <span class="comment">// 禁止中断</span></span><br><span class="line"></span><br><span class="line">  io_out8(<span class="number">0x03c8</span>, start); <span class="comment">// vga 设定，参考：https://wiki.osdev.org/VGA_Hardware</span></span><br><span class="line">  <span class="keyword">for</span> (<span class="keyword">int</span> i = start; i &lt;= end; i++) &#123;</span><br><span class="line">    io_out8(<span class="number">0x03c9</span>, rgb[<span class="number">0</span>] / <span class="number">4</span>);</span><br><span class="line">    io_out8(<span class="number">0x03c9</span>, rgb[<span class="number">1</span>] / <span class="number">4</span>);</span><br><span class="line">    io_out8(<span class="number">0x03c9</span>, rgb[<span class="number">2</span>] / <span class="number">4</span>);</span><br><span class="line">    rgb += <span class="number">3</span>;</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  io_store_eflags(eflags);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h2 id="GDT-amp-IDT"><a href="#GDT-amp-IDT" class="headerlink" title="GDT&amp;IDT"></a>GDT&amp;IDT</h2><h3 id="GDT"><a href="#GDT" class="headerlink" title="GDT"></a>GDT</h3><p>“global segment descriptor table”，全局段号记录表。将段号记录在内存的某个地方，然后将内存的起始地址和有效设定个数放在CPU的GDTR的（global segment descriptor table register）特殊寄存器中。段寄存器是16位，但是由于cpu设定原因，低3位不可用，所以真正可以使用的位数为13位，即可以分为8192个段。</p>
+          <!--noindex-->
+            <div class="post-button">
+              <a class="btn" href="/2024/06/23/IDT&GDT/#more" rel="contents">
+                Read more &raquo;
+              </a>
+            </div>
+          <!--/noindex-->
+        
+      
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+        <div class="post-eof"></div>
+      
+    </footer>
+  </article>
+</div>
+
+
+
+
+    
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="">
+    <link itemprop="mainEntityOfPage" href="http://wazhb.com/2024/06/02/%E5%88%9D%E8%AF%86%E6%93%8D%E4%BD%9C%E7%B3%BB%E7%BB%9F/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/yan.jpg">
+      <meta itemprop="name" content="Zhi Wang">
+      <meta itemprop="description" content="回首向来萧瑟处<br>归去，也无风雨也无晴。">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Zhi Wang の Blogs">
+    </span>
+      <header class="post-header">
+        <h2 class="post-title" itemprop="name headline">
+          <a href="/2024/06/02/%E5%88%9D%E8%AF%86%E6%93%8D%E4%BD%9C%E7%B3%BB%E7%BB%9F/" class="post-title-link" itemprop="url">初识操作系统（启动区和初始化）</a>
+        </h2>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">Posted on</span>
+
+      <time title="Created: 2024-06-02 00:00:00" itemprop="dateCreated datePublished" datetime="2024-06-02T00:00:00+08:00">2024-06-02</time>
+    </span>
+      <span class="post-meta-item">
+        <span class="post-meta-item-icon">
+          <i class="far fa-calendar-check"></i>
+        </span>
+        <span class="post-meta-item-text">Edited on</span>
+        <time title="Modified: 2024-06-23 19:31:44" itemprop="dateModified" datetime="2024-06-23T19:31:44+08:00">2024-06-23</time>
+      </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">In</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/30daysOS/" itemprop="url" rel="index"><span itemprop="name">30daysOS</span></a>
+        </span>
+          , 
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/30daysOS/CS/" itemprop="url" rel="index"><span itemprop="name">CS</span></a>
+        </span>
+    </span>
+
+  
+</div>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+          <h2 id="工具介绍"><a href="#工具介绍" class="headerlink" title="工具介绍"></a>工具介绍</h2><ul>
 <li><p>GCC: GNU Compiler Collection, 可以编译多语言的编译器。编译流程：预处理-&gt;编译-&gt;汇编-&gt;链接。</p>
 <ul>
 <li><p>参考：</p>
