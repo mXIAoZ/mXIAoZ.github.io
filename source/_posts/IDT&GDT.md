@@ -1,8 +1,16 @@
-# 中断
+---
+title: 中断设置和键鼠处理
+date: 2024/06/23
+categories:
+- 30daysOS
+- CS
+tags: [CS,30daysOS]
+mathjax: true
+---
 
 ## VGA 设定
 
-调色板设定：
+首先简单看待调色板设定的相关程序，具体可以参考下面的链接：
 
 ```c
 void set_palette(int start, int end, unsigned char *rgb) {
@@ -27,6 +35,8 @@ void set_palette(int start, int end, unsigned char *rgb) {
 ### GDT
 
 "global segment descriptor table"，全局段号记录表。将段号记录在内存的某个地方，然后将内存的起始地址和有效设定个数放在CPU的GDTR的（global segment descriptor table register）特殊寄存器中。段寄存器是16位，但是由于cpu设定原因，低3位不可用，所以真正可以使用的位数为13位，即可以分为8192个段。
+
+<!--more-->
 
 ```c
   #define ADR_GDT 0x00270000
