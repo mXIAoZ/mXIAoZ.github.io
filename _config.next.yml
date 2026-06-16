@@ -898,8 +898,6 @@ vendors:
 
   # MathJax
   mathjax:
-    enable: true
-    #per_page: true
 
   # KaTeX
   katex:
