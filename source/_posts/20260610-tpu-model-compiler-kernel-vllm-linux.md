@@ -58,7 +58,7 @@ Linux Kernel 通常不理解 MatMul、Softmax、Attention 的数学语义；它�
 </svg>
 </div>
 
-## 术语逐层解释
+## 从模型到计算图
 
 ### 大模型：高层函数与参数集合
 
@@ -68,15 +68,25 @@ Linux Kernel 通常不理解 MatMul、Softmax、Attention 的数学语义；它�
 
 深度学习框架负责描述模型结构、管理 Tensor、加载权重、执行自动微分、导出计算图，并调用后端 Runtime 或编译器。常见框架包括 PyTorch、TensorFlow、JAX、MindSpore 和 PaddlePaddle。
 
+模型代码通常是命令式或函数式写法；框架会把其中的张量运算记录成一张可分析、可优化的计算图。这张图不是图片，而是由节点和边组成的中间表示：节点通常是算子，边通常表示 Tensor 数据依赖。
+
 例如 PyTorch 代码：
 
 ```python
 y = torch.softmax(x @ w, dim=-1)
 ```
 
-从图语义上看，这段代码至少包含矩阵乘和 Softmax 两类算子。框架层负责表达这个关系，但不一定决定它最终在 TPU 上如何分块、如何搬运数据、如何复用片上缓存。
+从图语义上看，这段代码至少包含输入 Tensor `x`、权重 Tensor `w`、矩阵乘 `MatMul`、以及 `Softmax`。它可以抽象成：
 
-### Tensor：数据与元数据的组合
+```text
+x ─┐
+   ├─ MatMul ── Softmax ── y
+w ─┘
+```
+
+这就是计算图的核心作用：把“用户写的模型代码”转成“编译器和 Runtime 能理解的算子依赖关系”。框架层负责表达这个关系，但不一定决定它最终在 TPU 上如何分块、如何搬运数据、如何复用片上缓存。
+
+### Tensor：计算图边上的数据对象
 
 Tensor 不只是多维数组，还包含一组影响编译和执行的重要元数据。
 
@@ -90,7 +100,7 @@ Tensor 不只是多维数组，还包含一组影响编译和执行的重要元�
 
 LLM 中常见 hidden states 可以表示为 $[B,S,H]$，例如 $[1,2048,4096]$。
 
-### Operator：计算图中的数学语义节点
+### Operator：计算图节点上的数学语义
 
 Operator 定义“算什么”。例如 Elementwise Add、Reduction Sum、MatMul、Softmax、RMSNorm、Attention 都是算子。以矩阵乘为例：
 
