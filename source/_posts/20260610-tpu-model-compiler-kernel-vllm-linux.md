@@ -98,15 +98,91 @@ Tensor 不只是多维数组，还包含一组影响编译和执行的重要元�
 | stride | 各维度内存步长 | contiguous / non-contiguous |
 | device | 所在设备 | CPU、GPU、TPU、NPU |
 
-LLM 中常见 hidden states 可以表示为 $[B,S,H]$，例如 $[1,2048,4096]$。
+LLM 中常见 hidden states 可以表示为 `[B, S, H]`，例如 `[1, 2048, 4096]`：`B` 是 batch size，`S` 是 token 序列长度，`H` 是 hidden size。图像模型里常见的 `NCHW` / `NHWC` 则是在描述同一批图片数据的不同内存排列：`N` 是 batch，`C` 是 channel，`H` 是 height，`W` 是 width。
+
+在大多数 row-major 存储里，最后一个维度最连续。因此 `NCHW` 更容易连续扫同一个 channel 的宽度方向，`NHWC` 更容易连续读取同一个像素位置的多个 channel。算子的访问模式如果和 layout 对齐，DMA 搬运、cache locality、向量化和 kernel selection 都会更友好；如果不对齐，就可能需要 stride access 或额外 layout conversion。
+
+下面用一张纯文本图看同一张 `N=1, C=3, H=2, W=3` 图片在内存中的排列差异：
+
+```text
+NCHW = [N, C, H, W]
+
+内存顺序：先放完整 R 平面，再放完整 G 平面，再放完整 B 平面
+
+R channel: R00 R01 R02 R10 R11 R12
+G channel: G00 G01 G02 G10 G11 G12
+B channel: B00 B01 B02 B10 B11 B12
+
+连续方向：同一个 channel 内，H x W 空间位置连续
+适合访问：同一 channel 的空间窗口，例如卷积在 feature map 上滑动
+```
+
+```text
+NHWC = [N, H, W, C]
+
+内存顺序：每个像素位置的 R/G/B 连续放在一起
+
+pixel(0,0): R00 G00 B00
+pixel(0,1): R01 G01 B01
+pixel(0,2): R02 G02 B02
+pixel(1,0): R10 G10 B10
+...
+
+连续方向：同一个 pixel 的多个 channel 连续
+适合访问：同一空间位置的 channel 向量，例如按 channel 向量化读取
+```
+
+| Layout | 最连续的维度 | 更友好的访问模式 | 不匹配时的代价 |
+| --- | --- | --- | --- |
+| `NCHW` | `W`，也就是同一 channel 内的宽度方向 | 同一 channel 的空间窗口扫描 | 读取同一 pixel 的多个 channel 可能是 stride access |
+| `NHWC` | `C`，也就是同一 pixel 的 channel 向量 | 同一 pixel 的多个 channel 一次性读取 | 扫同一 channel 的空间平面可能不连续 |
+
+视觉上可以把它理解成下面这样：
+
+<div class="svg-figure">
+<svg viewBox="0 0 1180 500" width="100%" role="img" aria-label="NCHW and NHWC memory layout visual comparison">
+  <defs>
+    <marker id="arrow-layout-visual" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M1,1 L9,5 L1,9 Z" fill="#475569"/></marker>
+    <style>.lvbox{fill:#fff;stroke:#cbd5e1;stroke-width:2;rx:14}.lvtitle{font:700 18px 'Times New Roman','SimSun',serif;fill:#111827}.lvtext{font:14px 'Times New Roman','SimSun',serif;fill:#475569}.lvsmall{font:12px 'Times New Roman','SimSun',serif;fill:#64748b}.lvred{fill:#fee2e2;stroke:#fca5a5}.lvgreen{fill:#dcfce7;stroke:#86efac}.lvblue{fill:#dbeafe;stroke:#93c5fd}.lvyellow{fill:#fef3c7;stroke:#fcd34d}.lvarrow{stroke:#475569;stroke-width:2.2;fill:none;marker-end:url(#arrow-layout-visual)}</style>
+  </defs>
+  <text x="590" y="42" text-anchor="middle" class="lvtitle">NCHW / NHWC 的连续方向不同</text>
+  <text x="590" y="68" text-anchor="middle" class="lvtext">NCHW 把 channel 平面分开存；NHWC 把同一个 pixel 的 channel 放在一起。</text>
+
+  <rect x="60" y="105" width="500" height="190" class="lvbox"/>
+  <text x="310" y="138" text-anchor="middle" class="lvtitle">NCHW = [N, C, H, W]</text>
+  <rect x="110" y="188" width="110" height="62" class="lvred"/><text x="165" y="214" text-anchor="middle" class="lvtext">R plane</text><text x="165" y="236" text-anchor="middle" class="lvsmall">H x W 连续</text>
+  <rect x="245" y="188" width="110" height="62" class="lvgreen"/><text x="300" y="214" text-anchor="middle" class="lvtext">G plane</text><text x="300" y="236" text-anchor="middle" class="lvsmall">H x W 连续</text>
+  <rect x="380" y="188" width="110" height="62" class="lvblue"/><text x="435" y="214" text-anchor="middle" class="lvtext">B plane</text><text x="435" y="236" text-anchor="middle" class="lvsmall">H x W 连续</text>
+  <path d="M220 219 L245 219" class="lvarrow"/><path d="M355 219 L380 219" class="lvarrow"/>
+
+  <rect x="620" y="105" width="500" height="190" class="lvbox"/>
+  <text x="870" y="138" text-anchor="middle" class="lvtitle">NHWC = [N, H, W, C]</text>
+  <g transform="translate(685 190)">
+    <rect x="0" y="0" width="42" height="46" class="lvred"/><text x="21" y="29" text-anchor="middle" class="lvsmall">R</text>
+    <rect x="42" y="0" width="42" height="46" class="lvgreen"/><text x="63" y="29" text-anchor="middle" class="lvsmall">G</text>
+    <rect x="84" y="0" width="42" height="46" class="lvblue"/><text x="105" y="29" text-anchor="middle" class="lvsmall">B</text>
+    <rect x="155" y="0" width="42" height="46" class="lvred"/><text x="176" y="29" text-anchor="middle" class="lvsmall">R</text>
+    <rect x="197" y="0" width="42" height="46" class="lvgreen"/><text x="218" y="29" text-anchor="middle" class="lvsmall">G</text>
+    <rect x="239" y="0" width="42" height="46" class="lvblue"/><text x="260" y="29" text-anchor="middle" class="lvsmall">B</text>
+    <rect x="310" y="0" width="42" height="46" class="lvred"/><text x="331" y="29" text-anchor="middle" class="lvsmall">R</text>
+    <rect x="352" y="0" width="42" height="46" class="lvgreen"/><text x="373" y="29" text-anchor="middle" class="lvsmall">G</text>
+    <rect x="394" y="0" width="42" height="46" class="lvblue"/><text x="415" y="29" text-anchor="middle" class="lvsmall">B</text>
+    <text x="63" y="70" text-anchor="middle" class="lvsmall">pixel 0</text><text x="218" y="70" text-anchor="middle" class="lvsmall">pixel 1</text><text x="373" y="70" text-anchor="middle" class="lvsmall">pixel 2</text>
+  </g>
+
+  <rect x="120" y="355" width="290" height="58" class="lvred"/><text x="265" y="380" text-anchor="middle" class="lvtext">NCHW</text><text x="265" y="400" text-anchor="middle" class="lvsmall">适合扫同一 channel 的空间窗口</text>
+  <rect x="445" y="355" width="290" height="58" class="lvblue"/><text x="590" y="380" text-anchor="middle" class="lvtext">NHWC</text><text x="590" y="400" text-anchor="middle" class="lvsmall">适合读同一 pixel 的 channel 向量</text>
+  <rect x="770" y="355" width="290" height="58" class="lvyellow"/><text x="915" y="380" text-anchor="middle" class="lvtext">Layout 不匹配</text><text x="915" y="400" text-anchor="middle" class="lvsmall">可能需要 stride access 或 transpose</text>
+</svg>
+</div>
 
 ### Operator：计算图节点上的数学语义
 
 Operator 定义“算什么”。例如 Elementwise Add、Reduction Sum、MatMul、Softmax、RMSNorm、Attention 都是算子。以矩阵乘为例：
 
-$$
-C_{i,j}=\sum_{k=1}^{K}A_{i,k}B_{k,j}
-$$
+```text
+C[i, j] = sum(k=1..K, A[i, k] * B[k, j])
+```
 
 如果 $A\in\mathbb{R}^{M\times K}$，$B\in\mathbb{R}^{K\times N}$，那么输出 $C\in\mathbb{R}^{M\times N}$。这个定义描述的是数学语义，不描述具体硬件上如何高效执行。
 
@@ -179,7 +255,7 @@ vLLM 的定位是 **LLM inference serving engine**。它关注在线推理系统
   <rect x="810" y="60" width="250" height="78" class="vbox v2"/><text x="935" y="92" text-anchor="middle" class="vt">Request Scheduler</text><text x="935" y="116" text-anchor="middle" class="vs">admission and priority</text>
   <path d="M310 99 L435 99" class="va"/><path d="M685 99 L810 99" class="va"/>
   <rect x="160" y="240" width="280" height="92" class="vbox v2"/><text x="300" y="276" text-anchor="middle" class="vt">Continuous Batching</text><text x="300" y="304" text-anchor="middle" class="vs">merge prefill and decode workloads</text>
-  <rect x="680" y="240" width="280" height="92" class="vbox v3"/><text x="820" y="276" text-anchor="middle" class="vt">PagedAttention</text><text x="820" y="304" text-anchor="middle" class="vs">logical tokens → physical KV blocks</text>
+  <rect x="680" y="240" width="280" height="92" class="vbox v3"/><text x="820" y="276" text-anchor="middle" class="vt">PagedAttention</text><text x="820" y="304" text-anchor="middle" class="vs">block table maps tokens to KV blocks</text>
   <path d="M935 138 C935 195 820 190 820 240" class="va"/><path d="M900 138 C900 200 300 190 300 240" class="va"/><path d="M440 286 L680 286" class="va"/>
   <rect x="110" y="460" width="260" height="86" class="vbox v4"/><text x="240" y="494" text-anchor="middle" class="vt">Model Executor</text><text x="240" y="520" text-anchor="middle" class="vs">prefill, decode, sampling</text>
   <rect x="430" y="460" width="260" height="86" class="vbox"/><text x="560" y="494" text-anchor="middle" class="vt">Backend Runtime</text><text x="560" y="520" text-anchor="middle" class="vs">PyTorch / XLA / vendor SDK</text>
@@ -196,11 +272,11 @@ LLM 推理通常分成两个阶段：Prefill 和 Decode。Prefill 处理完整 p
 
 KV cache 的近似内存占用可以写成：
 
-$$
-KV_{bytes}=2 \times L \times B \times S \times H_{kv} \times D_{head} \times bytes(dtype)
-$$
+```text
+KV_bytes = 2 × L × B × S × H_kv × D_head × bytes(dtype)
+```
 
-其中 <script type="math/tex">2</script> 表示 K 和 V，<script type="math/tex">L</script> 是层数，<script type="math/tex">B</script> 是 batch size，<script type="math/tex">S</script> 是序列长度，<script type="math/tex">H_{kv}</script> 是 KV head 数，<script type="math/tex">D_{head}</script> 是每个 head 的维度。
+其中 `2` 表示 K 和 V，`L` 是层数，`B` 是 batch size，`S` 是序列长度，`H_kv` 是 KV head 数，`D_head` 是每个 head 的维度。
 
 <div class="svg-figure">
 <svg viewBox="0 0 1120 520" width="100%" role="img" aria-label="prefill decode pagedattention kv cache">
@@ -212,18 +288,24 @@ $$
   <rect x="390" y="60" width="220" height="80" class="kbox k2"/><text x="500" y="92" text-anchor="middle" class="kt">Prefill</text><text x="500" y="116" text-anchor="middle" class="ks">build KV cache</text>
   <rect x="710" y="60" width="220" height="80" class="kbox k3"/><text x="820" y="92" text-anchor="middle" class="kt">Decode</text><text x="820" y="116" text-anchor="middle" class="ks">read cache, append KV</text>
   <path d="M290 100 L390 100" class="ka"/><path d="M610 100 L710 100" class="ka"/>
-  <rect x="90" y="250" width="940" height="190" class="kbox"/><text x="560" y="286" text-anchor="middle" class="kt">PagedAttention: logical token blocks → physical KV blocks</text>
-  <rect x="160" y="330" width="110" height="48" class="kbox k1"/><text x="215" y="359" text-anchor="middle" class="ks">logical 0</text>
-  <rect x="290" y="330" width="110" height="48" class="kbox k1"/><text x="345" y="359" text-anchor="middle" class="ks">logical 1</text>
-  <rect x="420" y="330" width="110" height="48" class="kbox k1"/><text x="475" y="359" text-anchor="middle" class="ks">logical 2</text>
-  <rect x="640" y="330" width="110" height="48" class="kbox k3"/><text x="695" y="359" text-anchor="middle" class="ks">page 17</text>
-  <rect x="770" y="330" width="110" height="48" class="kbox k3"/><text x="825" y="359" text-anchor="middle" class="ks">page 04</text>
-  <rect x="900" y="330" width="110" height="48" class="kbox k3"/><text x="955" y="359" text-anchor="middle" class="ks">page 29</text>
-  <path d="M270 354 L640 354" class="ka"/><path d="M400 354 L770 354" class="ka"/><path d="M530 354 L900 354" class="ka"/>
+  <rect x="70" y="230" width="980" height="235" class="kbox"/><text x="560" y="264" text-anchor="middle" class="kt">PagedAttention: 用 block table 管理 KV cache</text>
+  <text x="235" y="302" text-anchor="middle" class="ks">逻辑 token 顺序：模型看到 token 是连续的</text>
+  <rect x="115" y="325" width="90" height="42" class="kbox k1"/><text x="160" y="351" text-anchor="middle" class="ks">tok 0-15</text>
+  <rect x="215" y="325" width="90" height="42" class="kbox k1"/><text x="260" y="351" text-anchor="middle" class="ks">tok 16-31</text>
+  <rect x="315" y="325" width="90" height="42" class="kbox k1"/><text x="360" y="351" text-anchor="middle" class="ks">tok 32-47</text>
+  <text x="535" y="302" text-anchor="middle" class="ks">block table：记录逻辑块到物理块的映射</text>
+  <rect x="475" y="325" width="120" height="42" class="kbox k2"/><text x="535" y="351" text-anchor="middle" class="ks">0→17  1→04</text>
+  <rect x="475" y="378" width="120" height="42" class="kbox k2"/><text x="535" y="404" text-anchor="middle" class="ks">2→29</text>
+  <text x="835" y="302" text-anchor="middle" class="ks">物理 KV blocks：真实内存里可分散、可复用</text>
+  <rect x="720" y="325" width="90" height="42" class="kbox k3"/><text x="765" y="351" text-anchor="middle" class="ks">KV #17</text>
+  <rect x="835" y="325" width="90" height="42" class="kbox k3"/><text x="880" y="351" text-anchor="middle" class="ks">KV #04</text>
+  <rect x="950" y="325" width="90" height="42" class="kbox k3"/><text x="995" y="351" text-anchor="middle" class="ks">KV #29</text>
+  <path d="M405 346 L475 346" class="ka"/><path d="M595 346 L720 346" class="ka"/><path d="M595 346 L835 346" class="ka"/><path d="M595 399 L950 346" class="ka"/>
+  <text x="560" y="446" text-anchor="middle" class="ks">好处：不要求 KV cache 连续分配，请求结束后释放物理块，其他请求可以复用。</text>
 </svg>
 </div>
 
-PagedAttention 的核心思想类似虚拟内存分页：逻辑上连续的 token block 不要求物理上连续存放。这样可以降低 KV cache 碎片，提高长上下文和多请求并发时的设备内存利用率。
+PagedAttention 的核心思想类似虚拟内存分页：请求里的 token 逻辑上是连续的，但它们对应的 KV cache 不必放在一整块连续内存里。vLLM 会把 token 序列切成固定大小的逻辑块，再通过 block table 映射到真实设备内存中的 physical KV blocks。这样可以降低 KV cache 碎片；一个请求结束后，它占用的物理 KV blocks 可以被释放并复用给其他请求，从而提高长上下文和多请求并发时的设备内存利用率。
 
 ## TPU 与 Linux 内核的关系
 
@@ -265,9 +347,9 @@ y = torch.relu(x @ w + b)
 
 数学形式是：
 
-$$
-Y=max(0,XW+b)
-$$
+```text
+Y = max(0, XW + b)
+```
 
 如果不融合，执行路径包含 MatMul、Add、ReLU 三个算子，可能产生两个中间张量；如果融合，编译器可以生成一个 `Fused MatMul + Bias + ReLU Kernel`，在累加完成后直接加 bias、应用激活函数并写回最终输出。
 
@@ -295,13 +377,33 @@ $$
 
 ## 例子二：Scaled Dot-Product Attention
 
-标准注意力公式是：
+Scaled Dot-Product Attention 的经典公式来自 Transformer 论文 *Attention Is All You Need* 的 3.2.1 节：
 
-$$
-O=softmax\left(\frac{QK^T}{\sqrt{d_k}}\right)V
-$$
+```text
+Attention(Q, K, V) = softmax((QK^T) / sqrt(d_k)) V
+```
 
-普通实现可能 materialize `scores` 和 `probs` 两个 $[B,H,S,S]$ 规模的中间矩阵。当序列长度 $S$ 很大时，内存读写会成为主要瓶颈。
+其中 `d_k` 是 key/query 向量维度，除以 `sqrt(d_k)` 是为了避免点积值随维度增大而过大，导致 softmax 进入梯度很小的区域。在 LLM 的 causal self-attention 中，softmax 前通常还会加入 causal mask，阻止当前位置看到未来 token。
+
+这里最容易抽象的是 `scores` 为什么会变成 `[B, H, S, S]`。先看 Q、K、V 的常见 shape：
+
+```text
+Q: [B, H, S, D]
+K: [B, H, S, D]
+V: [B, H, S, D]
+```
+
+其中 `B` 是 batch size，`H` 是 attention head 数，`S` 是序列长度，`D` 是每个 head 的维度。对每个 batch、每个 head 来说，注意力会让“每个 query token”去和“每个 key token”算相似度：
+
+```text
+Q[b,h]      : [S_query, D]
+K[b,h]^T    : [D, S_key]
+Q[b,h]K[b,h]^T -> [S_query, S_key]
+```
+
+自注意力里 `S_query = S_key = S`，所以每个 head 会得到一个 `[S, S]` 的 scores 矩阵；再乘上 batch 和 head 两个维度，整体就是 `[B, H, S, S]`。这两个 `S` 不是重复写错了：前一个 `S` 表示 query token 位置，后一个 `S` 表示 key token 位置。
+
+普通实现可能 materialize `scores` 和 `probs` 两个 `[B, H, S, S]` 规模的中间矩阵。当序列长度 `S` 很大时，内存读写会成为主要瓶颈。
 
 <div class="svg-figure">
 <svg viewBox="0 0 1180 520" width="100%" role="img" aria-label="scaled dot product attention">
@@ -309,16 +411,16 @@ $$
     <marker id="arrow-attn" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M1,1 L9,5 L1,9 Z" fill="#7c3aed"/></marker>
     <style>.abox{fill:#fff;stroke:#cbd5e1;stroke-width:2;rx:14}.a1{fill:#eff6ff;stroke:#93c5fd}.a2{fill:#fffbeb;stroke:#fcd34d}.a3{fill:#ecfdf5;stroke:#86efac}.at{font:700 16px 'Times New Roman','SimSun',serif;fill:#111827}.as{font:13px 'Times New Roman','SimSun',serif;fill:#475569}.aa{stroke:#7c3aed;stroke-width:2.2;fill:none;marker-end:url(#arrow-attn)}</style>
   </defs>
-  <rect x="60" y="70" width="130" height="60" class="abox a1"/><text x="125" y="107" text-anchor="middle" class="at">Q</text>
-  <rect x="60" y="210" width="130" height="60" class="abox a1"/><text x="125" y="247" text-anchor="middle" class="at">K</text>
-  <rect x="60" y="350" width="130" height="60" class="abox a1"/><text x="125" y="387" text-anchor="middle" class="at">V</text>
-  <rect x="300" y="145" width="170" height="76" class="abox a2"/><text x="385" y="178" text-anchor="middle" class="at">QKᵀ</text><text x="385" y="202" text-anchor="middle" class="as">scores</text>
+  <rect x="60" y="70" width="150" height="60" class="abox a1"/><text x="135" y="100" text-anchor="middle" class="at">Q</text><text x="135" y="121" text-anchor="middle" class="as">[B,H,S,D]</text>
+  <rect x="60" y="210" width="150" height="60" class="abox a1"/><text x="135" y="240" text-anchor="middle" class="at">K</text><text x="135" y="261" text-anchor="middle" class="as">[B,H,S,D]</text>
+  <rect x="60" y="350" width="150" height="60" class="abox a1"/><text x="135" y="380" text-anchor="middle" class="at">V</text><text x="135" y="401" text-anchor="middle" class="as">[B,H,S,D]</text>
+  <rect x="300" y="145" width="190" height="76" class="abox a2"/><text x="395" y="176" text-anchor="middle" class="at">QKᵀ scores</text><text x="395" y="202" text-anchor="middle" class="as">[B,H,S_query,S_key]</text>
   <rect x="560" y="145" width="170" height="76" class="abox a2"/><text x="645" y="178" text-anchor="middle" class="at">Scale</text><text x="645" y="202" text-anchor="middle" class="as">1 / sqrt(dₖ)</text>
   <rect x="820" y="145" width="170" height="76" class="abox a3"/><text x="905" y="178" text-anchor="middle" class="at">Softmax</text><text x="905" y="202" text-anchor="middle" class="as">probabilities</text>
   <rect x="560" y="340" width="170" height="76" class="abox a2"/><text x="645" y="373" text-anchor="middle" class="at">MatMul V</text><text x="645" y="397" text-anchor="middle" class="as">weighted sum</text>
   <rect x="820" y="340" width="170" height="76" class="abox"/><text x="905" y="373" text-anchor="middle" class="at">Output O</text><text x="905" y="397" text-anchor="middle" class="as">[B,H,S,D]</text>
   <path d="M190 100 C245 100 250 183 300 183" class="aa"/><path d="M190 240 C245 240 250 183 300 183" class="aa"/><path d="M470 183 L560 183" class="aa"/><path d="M730 183 L820 183" class="aa"/><path d="M905 221 C905 300 730 300 730 378" class="aa"/><path d="M190 380 L560 380" class="aa"/><path d="M730 378 L820 378" class="aa"/>
-  <rect x="1010" y="165" width="130" height="190" class="abox"/><text x="1075" y="200" text-anchor="middle" class="at">Optimization</text><text x="1075" y="232" text-anchor="middle" class="as">blocking</text><text x="1075" y="260" text-anchor="middle" class="as">online softmax</text><text x="1075" y="288" text-anchor="middle" class="as">avoid S×S</text><text x="1075" y="316" text-anchor="middle" class="as">less HBM traffic</text>
+  <rect x="1010" y="165" width="130" height="190" class="abox"/><text x="1075" y="200" text-anchor="middle" class="at">Optimization</text><text x="1075" y="232" text-anchor="middle" class="as">blocking</text><text x="1075" y="260" text-anchor="middle" class="as">online softmax</text><text x="1075" y="288" text-anchor="middle" class="as">avoid full</text><text x="1075" y="316" text-anchor="middle" class="as">[B,H,S,S]</text>
 </svg>
 </div>
 
@@ -340,9 +442,9 @@ FlashAttention 类优化的核心不是改变数学公式，而是改变执行�
 
 Arithmetic intensity 可以帮助判断算子更可能受计算限制还是带宽限制：
 
-$$
-AI=\frac{FLOPs}{Bytes\ moved}
-$$
+```text
+AI = FLOPs / Bytes moved
+```
 
 如果 $AI$ 很低，算子通常更容易受内存带宽限制；如果 $AI$ 很高，才更可能受计算单元吞吐限制。
 
