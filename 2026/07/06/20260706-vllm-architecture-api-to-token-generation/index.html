@@ -1,0 +1,1226 @@
+<!DOCTYPE html>
+<html lang="zh-Hans">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 5.4.2">
+
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+<link rel="stylesheet" href="https://fonts.loli.net/css?family=Noto+Serif+SC:300,300italic,400,400italic,700,700italic%7CRoboto+Slab:300,300italic,400,400italic,700,700italic%7CPT+Mono:300,300italic,400,400italic,700,700italic&display=swap&subset=latin,latin-ext">
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@5.15.3/css/all.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/animate.css@3.1.1/animate.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fancyapps/fancybox@3.5.7/dist/jquery.fancybox.min.css">
+
+<script class="next-config" data-name="main" type="application/json">{&quot;hostname&quot;:&quot;wazhb.com&quot;,&quot;root&quot;:&quot;&#x2F;&quot;,&quot;images&quot;:&quot;&#x2F;images&quot;,&quot;scheme&quot;:&quot;Gemini&quot;,&quot;version&quot;:&quot;8.3.0&quot;,&quot;exturl&quot;:false,&quot;sidebar&quot;:{&quot;position&quot;:&quot;left&quot;,&quot;display&quot;:&quot;always&quot;,&quot;padding&quot;:18,&quot;offset&quot;:12},&quot;copycode&quot;:false,&quot;bookmark&quot;:{&quot;enable&quot;:false,&quot;color&quot;:&quot;#222&quot;,&quot;save&quot;:&quot;auto&quot;},&quot;fancybox&quot;:true,&quot;mediumzoom&quot;:false,&quot;lazyload&quot;:false,&quot;pangu&quot;:false,&quot;comments&quot;:{&quot;style&quot;:&quot;tabs&quot;,&quot;active&quot;:null,&quot;storage&quot;:true,&quot;lazyload&quot;:false,&quot;nav&quot;:null},&quot;motion&quot;:{&quot;enable&quot;:true,&quot;async&quot;:false,&quot;transition&quot;:{&quot;post_block&quot;:&quot;fadeIn&quot;,&quot;post_header&quot;:&quot;fadeInDown&quot;,&quot;post_body&quot;:&quot;fadeInDown&quot;,&quot;coll_header&quot;:&quot;fadeInLeft&quot;,&quot;sidebar&quot;:&quot;fadeInUp&quot;}},&quot;prism&quot;:false,&quot;i18n&quot;:{&quot;placeholder&quot;:&quot;Searching...&quot;,&quot;empty&quot;:&quot;We didn&#39;t find any results for the search: ${query}&quot;,&quot;hits_time&quot;:&quot;${hits} results found in ${time} ms&quot;,&quot;hits&quot;:&quot;${hits} results found&quot;},&quot;path&quot;:&quot;&#x2F;search.xml&quot;,&quot;localsearch&quot;:{&quot;enable&quot;:true,&quot;trigger&quot;:&quot;auto&quot;,&quot;top_n_per_article&quot;:1,&quot;unescape&quot;:false,&quot;preload&quot;:false}}</script>
+<meta name="description" content="系列文章：vLLM 架构源码解析 | 第 1 篇 &#x2F; 共 4 篇日期：2026-07-06源码版本：vLLM v0.6.x (commit 98ba9b9)   目录 引言：为什么 vLLM 能提速 10-24 倍？ 核心架构：六层分工 一个请求的完整生命周期 PagedAttention：核心创新深入解析 总结与下期预告   1. 引言：为什么 vLLM 能提速 10-24 倍？vLLM 是">
+<meta property="og:type" content="article">
+<meta property="og:title" content="vLLM 架构源码解析（一）：从 API 请求到 Token 生成">
+<meta property="og:url" content="http://wazhb.com/2026/07/06/20260706-vllm-architecture-api-to-token-generation/index.html">
+<meta property="og:site_name" content="zzz の Blogs">
+<meta property="og:description" content="系列文章：vLLM 架构源码解析 | 第 1 篇 &#x2F; 共 4 篇日期：2026-07-06源码版本：vLLM v0.6.x (commit 98ba9b9)   目录 引言：为什么 vLLM 能提速 10-24 倍？ 核心架构：六层分工 一个请求的完整生命周期 PagedAttention：核心创新深入解析 总结与下期预告   1. 引言：为什么 vLLM 能提速 10-24 倍？vLLM 是">
+<meta property="og:locale">
+<meta property="og:image" content="http://wazhb.com/images/vllm-local-latency.png">
+<meta property="og:image" content="http://wazhb.com/images/vllm-local-throughput.png">
+<meta property="article:published_time" content="2026-07-05T16:00:00.000Z">
+<meta property="article:modified_time" content="2026-07-07T06:05:50.428Z">
+<meta property="article:author" content="zzz">
+<meta property="article:tag" content="vLLM">
+<meta property="article:tag" content="LLM Serving">
+<meta property="article:tag" content="Inference">
+<meta property="article:tag" content="Scheduler">
+<meta property="article:tag" content="Engine">
+<meta property="article:tag" content="Token Generation">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="http://wazhb.com/images/vllm-local-latency.png">
+
+
+<link rel="canonical" href="http://wazhb.com/2026/07/06/20260706-vllm-architecture-api-to-token-generation/">
+
+
+
+<script class="next-config" data-name="page" type="application/json">{&quot;sidebar&quot;:&quot;&quot;,&quot;isHome&quot;:false,&quot;isPost&quot;:true,&quot;lang&quot;:&quot;zh-Hans&quot;,&quot;comments&quot;:true,&quot;permalink&quot;:&quot;http:&#x2F;&#x2F;wazhb.com&#x2F;2026&#x2F;07&#x2F;06&#x2F;20260706-vllm-architecture-api-to-token-generation&#x2F;&quot;,&quot;path&quot;:&quot;2026&#x2F;07&#x2F;06&#x2F;20260706-vllm-architecture-api-to-token-generation&#x2F;&quot;,&quot;title&quot;:&quot;vLLM 架构源码解析（一）：从 API 请求到 Token 生成&quot;}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">&quot;&quot;</script>
+<title>vLLM 架构源码解析（一）：从 API 请求到 Token 生成 | zzz の Blogs</title><script src="/js/config.js"></script>
+  
+
+
+
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+<link rel="alternate" href="/atom.xml" title="zzz の Blogs" type="application/atom+xml">
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="Toggle navigation bar" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <h1 class="site-title">zzz の Blogs</h1>
+      <i class="logo-line"></i>
+    </a>
+      <p class="site-subtitle" itemprop="description">尝试写博客の小白</p>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu">
+        <li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>Home</a></li>
+        <li class="menu-item menu-item-about"><a href="/about/" rel="section"><i class="fa fa-user fa-fw"></i>About</a></li>
+        <li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>Tags<span class="badge">20</span></a></li>
+        <li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>Categories<span class="badge">10</span></a></li>
+        <li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>Archives<span class="badge">11</span></a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>Search
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup"><div class="search-header">
+  <span class="search-icon">
+    <i class="fa fa-search"></i>
+  </span>
+  <div class="search-input-container">
+    <input autocomplete="off" autocapitalize="off" maxlength="80"
+           placeholder="Searching..." spellcheck="false"
+           type="search" class="search-input">
+  </div>
+  <span class="popup-btn-close" role="button">
+    <i class="fa fa-times-circle"></i>
+  </span>
+</div>
+<div class="search-result-container no-result">
+  <div class="search-result-icon">
+    <i class="fa fa-spinner fa-pulse fa-5x"></i>
+  </div>
+</div>
+
+    </div>
+  </div>
+
+</div>
+        
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          Table of Contents
+        </li>
+        <li class="sidebar-nav-overview">
+          Overview
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E7%9B%AE%E5%BD%95"><span class="nav-number">1.</span> <span class="nav-text">目录</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#1-%E5%BC%95%E8%A8%80%EF%BC%9A%E4%B8%BA%E4%BB%80%E4%B9%88-vLLM-%E8%83%BD%E6%8F%90%E9%80%9F-10-24-%E5%80%8D%EF%BC%9F"><span class="nav-number">2.</span> <span class="nav-text">1. 引言：为什么 vLLM 能提速 10-24 倍？</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#1-1-%E6%A0%B8%E5%BF%83%E4%BC%98%E5%8C%96%E6%8A%80%E6%9C%AF"><span class="nav-number">2.1.</span> <span class="nav-text">1.1 核心优化技术</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#PagedAttention%EF%BC%9A%E8%99%9A%E6%8B%9F%E5%86%85%E5%AD%98%E7%AE%A1%E7%90%86-KV-Cache"><span class="nav-number">2.1.1.</span> <span class="nav-text">PagedAttention：虚拟内存管理 KV Cache</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#Prefix-Caching%EF%BC%9A%E8%B7%A8%E8%AF%B7%E6%B1%82%E5%85%B1%E4%BA%AB"><span class="nav-number">2.1.2.</span> <span class="nav-text">Prefix Caching：跨请求共享</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#Continuous-Batching-Chunked-Prefill"><span class="nav-number">2.1.3.</span> <span class="nav-text">Continuous Batching + Chunked Prefill</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#%E6%94%AF%E6%8C%81%E6%8A%A2%E5%8D%A0%E7%9A%84%E8%B0%83%E5%BA%A6%E5%99%A8"><span class="nav-number">2.1.4.</span> <span class="nav-text">支持抢占的调度器</span></a></li></ol></li><li class="nav-item nav-level-3"><a class="nav-link" href="#1-2-%E6%9C%AC%E6%96%87%E8%81%9A%E7%84%A6"><span class="nav-number">2.2.</span> <span class="nav-text">1.2 本文聚焦</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#2-%E6%A0%B8%E5%BF%83%E6%9E%B6%E6%9E%84%EF%BC%9A%E5%85%AD%E5%B1%82%E5%88%86%E5%B7%A5"><span class="nav-number">3.</span> <span class="nav-text">2. 核心架构：六层分工</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#2-1-%E6%95%B4%E4%BD%93%E6%9E%B6%E6%9E%84%E5%9B%BE"><span class="nav-number">3.1.</span> <span class="nav-text">2.1 整体架构图</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#2-2-%E6%95%B0%E6%8D%AE%E6%B5%81%E8%BD%AC"><span class="nav-number">3.2.</span> <span class="nav-text">2.2 数据流转</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#2-3-%E5%85%AD%E5%A4%A7%E7%BB%84%E4%BB%B6%E8%AF%A6%E8%A7%A3"><span class="nav-number">3.3.</span> <span class="nav-text">2.3 六大组件详解</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#1-LLMEngine%EF%BC%9A%E5%89%8D%E5%90%8E%E5%A4%84%E7%90%86%E5%B1%82"><span class="nav-number">3.3.1.</span> <span class="nav-text">(1) LLMEngine：前后处理层</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#2-EngineCore%EF%BC%9A%E8%B0%83%E5%BA%A6-%E6%89%A7%E8%A1%8C%E6%A0%B8%E5%BF%83"><span class="nav-number">3.3.2.</span> <span class="nav-text">(2) EngineCore：调度+执行核心</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#3-Scheduler%EF%BC%9A%E8%AF%B7%E6%B1%82%E8%B0%83%E5%BA%A6%E5%99%A8"><span class="nav-number">3.3.3.</span> <span class="nav-text">(3) Scheduler：请求调度器</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#4-KVCacheManager%EF%BC%9A%E6%98%BE%E5%AD%98%E7%AE%A1%E7%90%86"><span class="nav-number">3.3.4.</span> <span class="nav-text">(4) KVCacheManager：显存管理</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#5-ModelExecutor-Worker-ModelRunner"><span class="nav-number">3.3.5.</span> <span class="nav-text">(5) ModelExecutor &#x2F; Worker &#x2F; ModelRunner</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#6-Sampler-OutputProcessor"><span class="nav-number">3.3.6.</span> <span class="nav-text">(6) Sampler &#x2F; OutputProcessor</span></a></li></ol></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#3-%E4%B8%80%E4%B8%AA%E8%AF%B7%E6%B1%82%E7%9A%84%E5%AE%8C%E6%95%B4%E7%94%9F%E5%91%BD%E5%91%A8%E6%9C%9F"><span class="nav-number">4.</span> <span class="nav-text">3. 一个请求的完整生命周期</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#3-1-%E6%8E%A5%E6%94%B6%E9%98%B6%E6%AE%B5%EF%BC%9ALLM-generate-%E5%88%B0-add-request"><span class="nav-number">4.1.</span> <span class="nav-text">3.1 接收阶段：LLM.generate 到 add_request</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#3-2-%E8%B0%83%E5%BA%A6%E9%98%B6%E6%AE%B5%EF%BC%9AScheduler-schedule-%E7%9A%84%E6%A0%B8%E5%BF%83%E9%80%BB%E8%BE%91"><span class="nav-number">4.2.</span> <span class="nav-text">3.2 调度阶段：Scheduler.schedule 的核心逻辑</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#%E5%85%B3%E9%94%AE%E9%80%BB%E8%BE%91-1%EF%BC%9A%E8%AE%A1%E7%AE%97%E6%9C%AC%E6%AC%A1%E9%9C%80%E8%A6%81%E5%A4%84%E7%90%86%E7%9A%84-token-%E6%95%B0"><span class="nav-number">4.2.1.</span> <span class="nav-text">关键逻辑 1：计算本次需要处理的 token 数</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#%E5%85%B3%E9%94%AE%E9%80%BB%E8%BE%91-2%EF%BC%9A%E6%8A%A2%E5%8D%A0%E6%9C%BA%E5%88%B6"><span class="nav-number">4.2.2.</span> <span class="nav-text">关键逻辑 2：抢占机制</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#%E5%85%B3%E9%94%AE%E9%80%BB%E8%BE%91-3%EF%BC%9APrefix-Caching"><span class="nav-number">4.2.3.</span> <span class="nav-text">关键逻辑 3：Prefix Caching</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#%E5%85%B3%E9%94%AE%E9%80%BB%E8%BE%91-4%EF%BC%9AChunked-Prefill"><span class="nav-number">4.2.4.</span> <span class="nav-text">关键逻辑 4：Chunked Prefill</span></a></li></ol></li><li class="nav-item nav-level-3"><a class="nav-link" href="#3-3-%E6%89%A7%E8%A1%8C%E9%98%B6%E6%AE%B5%EF%BC%9AWorker-execute-model"><span class="nav-number">4.3.</span> <span class="nav-text">3.3 执行阶段：Worker.execute_model</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#3-3-1-%E6%9B%B4%E6%96%B0%E7%8A%B6%E6%80%81%EF%BC%88-update-states%EF%BC%89"><span class="nav-number">4.3.1.</span> <span class="nav-text">3.3.1 更新状态（_update_states）</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#3-3-2-%E5%87%86%E5%A4%87%E8%BE%93%E5%85%A5%EF%BC%88-prepare-inputs%EF%BC%89"><span class="nav-number">4.3.2.</span> <span class="nav-text">3.3.2 准备输入（_prepare_inputs）</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#3-3-3-%E6%A8%A1%E5%9E%8B%E6%8E%A8%E7%90%86%EF%BC%88forward%EF%BC%89"><span class="nav-number">4.3.3.</span> <span class="nav-text">3.3.3 模型推理（forward）</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#3-3-4-%E9%87%87%E6%A0%B7%EF%BC%88-sample%EF%BC%89"><span class="nav-number">4.3.4.</span> <span class="nav-text">3.3.4 采样（_sample）</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#3-3-5-%E5%AE%8C%E6%95%B4%E6%89%A7%E8%A1%8C%E6%B5%81%E7%A8%8B%E5%9B%BE"><span class="nav-number">4.3.5.</span> <span class="nav-text">3.3.5 完整执行流程图</span></a></li></ol></li><li class="nav-item nav-level-3"><a class="nav-link" href="#3-4-%E8%BE%93%E5%87%BA%E9%98%B6%E6%AE%B5%EF%BC%9A%E4%BB%8E-logits-%E5%88%B0%E7%94%A8%E6%88%B7%E6%96%87%E6%9C%AC"><span class="nav-number">4.4.</span> <span class="nav-text">3.4 输出阶段：从 logits 到用户文本</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#3-4-1-Scheduler-%E6%9B%B4%E6%96%B0%E7%8A%B6%E6%80%81"><span class="nav-number">4.4.1.</span> <span class="nav-text">3.4.1 Scheduler 更新状态</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#3-4-2-OutputProcessor-%E8%A7%A3%E7%A0%81"><span class="nav-number">4.4.2.</span> <span class="nav-text">3.4.2 OutputProcessor 解码</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#3-4-3-%E6%B5%81%E5%BC%8F%E8%BE%93%E5%87%BA%EF%BC%88Streaming%EF%BC%89"><span class="nav-number">4.4.3.</span> <span class="nav-text">3.4.3 流式输出（Streaming）</span></a></li></ol></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#4-PagedAttention%EF%BC%9A%E6%A0%B8%E5%BF%83%E5%88%9B%E6%96%B0%E6%B7%B1%E5%85%A5%E8%A7%A3%E6%9E%90"><span class="nav-number">5.</span> <span class="nav-text">4. PagedAttention：核心创新深入解析</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#4-1-%E4%BC%A0%E7%BB%9F-KV-Cache-%E7%9A%84%E9%97%AE%E9%A2%98"><span class="nav-number">5.1.</span> <span class="nav-text">4.1 传统 KV Cache 的问题</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#%E5%86%85%E5%AD%98%E5%B8%83%E5%B1%80%E5%AF%B9%E6%AF%94"><span class="nav-number">5.1.1.</span> <span class="nav-text">内存布局对比</span></a></li></ol></li><li class="nav-item nav-level-3"><a class="nav-link" href="#4-2-PagedAttention-%E7%9A%84%E8%A7%A3%E5%86%B3%E6%96%B9%E6%A1%88"><span class="nav-number">5.2.</span> <span class="nav-text">4.2 PagedAttention 的解决方案</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#%E6%A0%B8%E5%BF%83%E6%80%9D%E6%83%B3%EF%BC%9A%E8%99%9A%E6%8B%9F%E5%86%85%E5%AD%98-Paging"><span class="nav-number">5.2.1.</span> <span class="nav-text">核心思想：虚拟内存 Paging</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#Block-%E7%AE%A1%E7%90%86%E7%BB%86%E8%8A%82"><span class="nav-number">5.2.2.</span> <span class="nav-text">Block 管理细节</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#Block-Table-%E6%98%A0%E5%B0%84"><span class="nav-number">5.2.3.</span> <span class="nav-text">Block Table 映射</span></a></li></ol></li><li class="nav-item nav-level-3"><a class="nav-link" href="#4-3-%E5%9F%BA%E4%BA%8E-Block-%E7%9A%84%E9%AB%98%E7%BA%A7%E7%89%B9%E6%80%A7"><span class="nav-number">5.3.</span> <span class="nav-text">4.3 基于 Block 的高级特性</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#4-3-1-Prefix-Caching%EF%BC%88%E5%85%B1%E4%BA%AB%E5%89%8D%E7%BC%80%EF%BC%89"><span class="nav-number">5.3.1.</span> <span class="nav-text">4.3.1 Prefix Caching（共享前缀）</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#4-3-2-Copy-on-Write%EF%BC%88%E5%86%99%E6%97%B6%E5%A4%8D%E5%88%B6%EF%BC%89"><span class="nav-number">5.3.2.</span> <span class="nav-text">4.3.2 Copy-on-Write（写时复制）</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#4-3-3-%E5%8A%A8%E6%80%81-Block-%E5%88%86%E9%85%8D"><span class="nav-number">5.3.3.</span> <span class="nav-text">4.3.3 动态 Block 分配</span></a></li></ol></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#5-%E6%80%A7%E8%83%BD%E6%95%B0%E6%8D%AE%E5%AF%B9%E6%AF%94"><span class="nav-number">6.</span> <span class="nav-text">5. 性能数据对比</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#%E5%AE%98%E6%96%B9-Benchmark%EF%BC%88A100-80GB%EF%BC%8CLlama-13B%EF%BC%89"><span class="nav-number">6.0.1.</span> <span class="nav-text">官方 Benchmark（A100-80GB，Llama-13B）</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#%E4%B8%8D%E5%90%8C-Batch-Size-%E4%B8%8B%E7%9A%84%E5%90%9E%E5%90%90%E9%87%8F"><span class="nav-number">6.0.2.</span> <span class="nav-text">不同 Batch Size 下的吞吐量</span></a></li></ol></li><li class="nav-item nav-level-3"><a class="nav-link" href="#5-1-Block-Size-%E7%9A%84%E6%9D%83%E8%A1%A1"><span class="nav-number">6.1.</span> <span class="nav-text">5.1 Block Size 的权衡</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#5-2-%E8%87%AA%E7%A0%94%E5%8A%A0%E9%80%9F%E5%8D%A1%E4%B8%8A%E7%9A%84%E6%B5%8B%E8%AF%95"><span class="nav-number">6.2.</span> <span class="nav-text">5.2 自研加速卡上的测试</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#6-%E6%80%BB%E7%BB%93%E4%B8%8E%E4%B8%8B%E6%9C%9F%E9%A2%84%E5%91%8A"><span class="nav-number">7.</span> <span class="nav-text">6. 总结与下期预告</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#6-1-%E6%A0%B8%E5%BF%83%E8%A6%81%E7%82%B9%E5%9B%9E%E9%A1%BE"><span class="nav-number">7.1.</span> <span class="nav-text">6.1 核心要点回顾</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#%E5%85%AD%E5%B1%82%E6%9E%B6%E6%9E%84"><span class="nav-number">7.1.1.</span> <span class="nav-text">六层架构</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#%E5%AE%8C%E6%95%B4%E7%94%9F%E5%91%BD%E5%91%A8%E6%9C%9F"><span class="nav-number">7.1.2.</span> <span class="nav-text">完整生命周期</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#PagedAttention-%E7%9A%84%E5%9B%9B%E5%A4%A7%E7%89%B9%E6%80%A7"><span class="nav-number">7.1.3.</span> <span class="nav-text">PagedAttention 的四大特性</span></a></li></ol></li><li class="nav-item nav-level-3"><a class="nav-link" href="#6-2-%E4%B8%8E%E4%BC%A0%E7%BB%9F%E6%96%B9%E6%A1%88%E5%AF%B9%E6%AF%94"><span class="nav-number">7.2.</span> <span class="nav-text">6.2 与传统方案对比</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#6-3-%E9%80%82%E7%94%A8%E5%9C%BA%E6%99%AF"><span class="nav-number">7.3.</span> <span class="nav-text">6.3 适用场景</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#6-4-%E4%B8%8B%E4%B8%80%E7%AF%87%E9%A2%84%E5%91%8A"><span class="nav-number">7.4.</span> <span class="nav-text">6.4 下一篇预告</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%8F%82%E8%80%83%E8%B5%84%E6%96%99"><span class="nav-number">8.</span> <span class="nav-text">参考资料</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E5%AE%98%E6%96%B9%E8%B5%84%E6%BA%90"><span class="nav-number">8.1.</span> <span class="nav-text">官方资源</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E6%BA%90%E7%A0%81%E8%B7%AF%E5%BE%84%E9%80%9F%E6%9F%A5"><span class="nav-number">8.2.</span> <span class="nav-text">源码路径速查</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E9%99%84%E5%BD%95%EF%BC%9A%E5%BF%AB%E9%80%9F%E4%B8%8A%E6%89%8B%E4%BB%A3%E7%A0%81"><span class="nav-number">9.</span> <span class="nav-text">附录：快速上手代码</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#A-%E6%9C%80%E7%AE%80%E5%8D%95%E7%9A%84%E4%BD%BF%E7%94%A8"><span class="nav-number">9.1.</span> <span class="nav-text">A. 最简单的使用</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#B-%E5%90%AF%E7%94%A8-Prefix-Caching"><span class="nav-number">9.2.</span> <span class="nav-text">B. 启用 Prefix Caching</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#C-OpenAI-%E5%85%BC%E5%AE%B9-API-Server"><span class="nav-number">9.3.</span> <span class="nav-text">C. OpenAI 兼容 API Server</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#D-%E8%A7%82%E5%AF%9F-Prefix-Cache-%E5%91%BD%E4%B8%AD%E7%8E%87"><span class="nav-number">9.4.</span> <span class="nav-text">D. 观察 Prefix Cache 命中率</span></a></li></ol></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author site-overview-item animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="zzz"
+      src="/images/yan.jpg">
+  <p class="site-author-name" itemprop="name">zzz</p>
+  <div class="site-description" itemprop="description">回首向来萧瑟处<br>归去，也无风雨也无晴。</div>
+</div>
+<div class="site-state-wrap site-overview-item animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">11</span>
+          <span class="site-state-item-name">posts</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">10</span>
+        <span class="site-state-item-name">categories</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">20</span>
+        <span class="site-state-item-name">tags</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author site-overview-item animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/mXIAoZ" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;mXIAoZ" rel="noopener" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:14751725611@163.com" title="E-Mail → mailto:14751725611@163.com" rel="noopener" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+  <div class="cc-license site-overview-item animated" itemprop="license">
+    <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/deed.zh" class="cc-opacity" rel="noopener" target="_blank"><img src="/images/cc-by-nc-sa.svg" alt="Creative Commons"></a>
+  </div>
+
+
+
+        </div>
+      </div>
+    </div>
+  </aside>
+  <div class="sidebar-dimmer"></div>
+
+
+    </header>
+
+    
+  <div class="back-to-top" role="button" aria-label="Back to top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+  <div class="reading-progress-bar"></div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-Hans">
+    <link itemprop="mainEntityOfPage" href="http://wazhb.com/2026/07/06/20260706-vllm-architecture-api-to-token-generation/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/yan.jpg">
+      <meta itemprop="name" content="zzz">
+      <meta itemprop="description" content="回首向来萧瑟处<br>归去，也无风雨也无晴。">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="zzz の Blogs">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          vLLM 架构源码解析（一）：从 API 请求到 Token 生成
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">Posted on</span>
+
+      <time title="Created: 2026-07-06 00:00:00" itemprop="dateCreated datePublished" datetime="2026-07-06T00:00:00+08:00">2026-07-06</time>
+    </span>
+      <span class="post-meta-item">
+        <span class="post-meta-item-icon">
+          <i class="far fa-calendar-check"></i>
+        </span>
+        <span class="post-meta-item-text">Edited on</span>
+        <time title="Modified: 2026-07-07 14:05:50" itemprop="dateModified" datetime="2026-07-07T14:05:50+08:00">2026-07-07</time>
+      </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">In</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/AI-Infra/" itemprop="url" rel="index"><span itemprop="name">AI Infra</span></a>
+        </span>
+          , 
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/AI-Infra/vLLM/" itemprop="url" rel="index"><span itemprop="name">vLLM</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-item" title="Views" id="busuanzi_container_page_pv">
+      <span class="post-meta-item-icon">
+        <i class="far fa-eye"></i>
+      </span>
+      <span class="post-meta-item-text">Views: </span>
+      <span id="busuanzi_value_page_pv"></span>
+    </span>
+</div>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+        <blockquote>
+<p><strong>系列文章</strong>：vLLM 架构源码解析 | 第 1 篇 / 共 4 篇<br><strong>日期</strong>：2026-07-06<br><strong>源码版本</strong>：vLLM v0.6.x (commit 98ba9b9)</p>
+</blockquote>
+<hr>
+<h2 id="目录"><a href="#目录" class="headerlink" title="目录"></a>目录</h2><ol>
+<li><a href="#1-引言为什么-vllm-能提速-10-24-倍">引言：为什么 vLLM 能提速 10-24 倍？</a></li>
+<li><a href="#2-核心架构六层分工">核心架构：六层分工</a></li>
+<li><a href="#3-一个请求的完整生命周期">一个请求的完整生命周期</a></li>
+<li><a href="#4-pagedattention核心创新深入解析">PagedAttention：核心创新深入解析</a></li>
+<li><a href="#5-总结与下期预告">总结与下期预告</a></li>
+</ol>
+<hr>
+<h2 id="1-引言：为什么-vLLM-能提速-10-24-倍？"><a href="#1-引言：为什么-vLLM-能提速-10-24-倍？" class="headerlink" title="1. 引言：为什么 vLLM 能提速 10-24 倍？"></a>1. 引言：为什么 vLLM 能提速 10-24 倍？</h2><p>vLLM 是 UC Berkeley 于 2023 年推出的高性能 LLM 推理引擎。相比 HuggingFace Transformers，在相同硬件上可以达到：</p>
+<ul>
+<li><strong>吞吐量提升 10-24 倍</strong>（官方 benchmark，A100-80GB）</li>
+<li><strong>延迟降低 50-70%</strong>（批量推理场景）</li>
+<li><strong>显存利用率提升 2-4 倍</strong>（从 20% 提升到 80%+）</li>
+</ul>
+<span id="more"></span>
+<h3 id="1-1-核心优化技术"><a href="#1-1-核心优化技术" class="headerlink" title="1.1 核心优化技术"></a>1.1 核心优化技术</h3><h4 id="PagedAttention：虚拟内存管理-KV-Cache"><a href="#PagedAttention：虚拟内存管理-KV-Cache" class="headerlink" title="PagedAttention：虚拟内存管理 KV Cache"></a>PagedAttention：虚拟内存管理 KV Cache</h4><p><strong>问题</strong>：传统推理中，KV Cache 必须预分配连续显存，导致：</p>
+<ul>
+<li>碎片化严重（实际利用率 &lt; 20%）</li>
+<li>无法动态扩展</li>
+<li>多请求间无法共享</li>
+</ul>
+<p><strong>解决</strong>：借鉴操作系统的虚拟内存分页（paging）机制：</p>
+<ol>
+<li><strong>Block 切分</strong>：将 KV Cache 切成固定大小的 block（默认 16 tokens）</li>
+<li><strong>虚拟地址映射</strong>：通过 block table 映射逻辑地址 → 物理地址</li>
+<li><strong>按需分配</strong>：生成时动态分配 block，用完即释放</li>
+</ol>
+<figure class="highlight inform7"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">传统方式（连续分配）:</span><br><span class="line">Request 1: <span class="comment">[█████████████████████░░░░░░░░░]</span> ← 大量空洞</span><br><span class="line">Request 2: <span class="comment">[████░░░░░░░░░░░░░░░░░░░░░░░░░]</span></span><br><span class="line"></span><br><span class="line">PagedAttention（block 分配）:</span><br><span class="line">Physical Block Pool: <span class="comment">[0]</span><span class="comment">[1]</span><span class="comment">[2]</span><span class="comment">[3]</span><span class="comment">[4]</span><span class="comment">[5]</span><span class="comment">[6]</span><span class="comment">[7]</span></span><br><span class="line">Request 1: blocks <span class="comment">[0,1,2,4]</span>  ← 物理不连续</span><br><span class="line">Request 2: blocks <span class="comment">[0,1,5]</span>    ← 与 R1 共享 <span class="comment">[0,1]</span></span><br></pre></td></tr></table></figure>
+<p><strong>效果</strong>：显存利用率从 20% 提升到 <strong>80%+</strong></p>
+<hr>
+<h4 id="Prefix-Caching：跨请求共享"><a href="#Prefix-Caching：跨请求共享" class="headerlink" title="Prefix Caching：跨请求共享"></a>Prefix Caching：跨请求共享</h4><p>基于 PagedAttention 的 block 管理，可以实现：</p>
+<ul>
+<li><strong>System Prompt 共享</strong>：多个用户共享相同的系统提示词</li>
+<li><strong>Few-shot Examples 共享</strong>：批量任务复用示例</li>
+<li><strong>文档共享</strong>：多个查询共享同一文档的 KV Cache</li>
+</ul>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 场景示例</span></span><br><span class="line">system_prompt = <span class="string">&quot;You are a helpful assistant.&quot;</span>  <span class="comment"># 100 tokens</span></span><br><span class="line">queries = [</span><br><span class="line">    <span class="string">&quot;What is Python?&quot;</span>,</span><br><span class="line">    <span class="string">&quot;Explain AI&quot;</span>,</span><br><span class="line">    <span class="string">&quot;Tell me about ML&quot;</span></span><br><span class="line">]</span><br><span class="line"></span><br><span class="line"><span class="comment"># 传统方式：每个请求独立计算 system_prompt（100 tokens × 3 = 300 tokens）</span></span><br><span class="line"><span class="comment"># vLLM：system_prompt 只计算一次，3 个请求共享（100 + 10 + 10 + 10 = 130 tokens）</span></span><br><span class="line"><span class="comment"># 节省：57% 的计算量</span></span><br></pre></td></tr></table></figure>
+<p><strong>效果</strong>：命中缓存时，TTFT（首 token 延迟）降低 <strong>80%+</strong></p>
+<hr>
+<h4 id="Continuous-Batching-Chunked-Prefill"><a href="#Continuous-Batching-Chunked-Prefill" class="headerlink" title="Continuous Batching + Chunked Prefill"></a>Continuous Batching + Chunked Prefill</h4><p><strong>传统批处理问题</strong>：</p>
+<ul>
+<li>Static Batching：必须等所有请求都结束才能加新的</li>
+<li>长 prompt 独占整个 batch，导致短请求饥饿</li>
+</ul>
+<p><strong>vLLM 方案</strong>：</p>
+<figure class="highlight css"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line">传统 Static Batching（等待 max 请求完成）:</span><br><span class="line">Step <span class="number">1</span>: [<span class="built_in">Req1_prefill</span>(<span class="number">2000</span> tok)] ← 其他请求等待</span><br><span class="line">Step <span class="number">2</span>: [Req1_decode, <span class="built_in">Req2_prefill</span>(<span class="number">10</span> tok), <span class="built_in">Req3_prefill</span>(<span class="number">10</span> tok)]</span><br><span class="line">Step <span class="number">3</span>: [Req1_decode, Req2_decode, Req3_decode]</span><br><span class="line"></span><br><span class="line">vLLM Continuous Batching + Chunked Prefill:</span><br><span class="line">Step <span class="number">1</span>: [<span class="built_in">Req1_prefill_chunk1</span>(<span class="number">512</span>), <span class="built_in">Req2_prefill</span>(<span class="number">10</span>), <span class="built_in">Req3_prefill</span>(<span class="number">10</span>)]</span><br><span class="line">Step <span class="number">2</span>: [<span class="built_in">Req1_prefill_chunk2</span>(<span class="number">512</span>), Req2_decode, Req3_decode]</span><br><span class="line">Step <span class="number">3</span>: [<span class="built_in">Req1_prefill_chunk3</span>(<span class="number">512</span>), Req2_decode, Req3_decode]</span><br><span class="line">Step <span class="number">4</span>: [<span class="built_in">Req1_prefill_chunk4</span>(<span class="number">464</span>), Req2_decode, Req3_decode]</span><br><span class="line">Step <span class="number">5</span>: [Req1_decode, Req2_decode, Req3_decode, <span class="built_in">Req4_prefill</span>(NEW!)]</span><br><span class="line">       ↑ 任意时刻都可以加入新请求</span><br></pre></td></tr></table></figure>
+<p><strong>效果</strong>：</p>
+<ul>
+<li>吞吐量提升 <strong>2-3 倍</strong></li>
+<li>P99 延迟降低 <strong>50%</strong></li>
+</ul>
+<hr>
+<h4 id="支持抢占的调度器"><a href="#支持抢占的调度器" class="headerlink" title="支持抢占的调度器"></a>支持抢占的调度器</h4><p>当显存不足时，低优先级请求会被抢占：</p>
+<div class="table-container">
+<table>
+<thead>
+<tr>
+<th>策略</th>
+<th>v0 (Swap)</th>
+<th>v1 (Recompute)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>抢占动作</strong></td>
+<td>将 KV Cache swap 到 CPU</td>
+<td>释放 KV Cache</td>
+</tr>
+<tr>
+<td><strong>恢复动作</strong></td>
+<td>swap 回 GPU</td>
+<td>重新计算 prefill</td>
+</tr>
+<tr>
+<td><strong>适用场景</strong></td>
+<td>长文档、prefill 慢</td>
+<td>短对话、prefill 快</td>
+</tr>
+<tr>
+<td><strong>显存占用</strong></td>
+<td>需要 CPU 内存</td>
+<td>不占 CPU 内存</td>
+</tr>
+</tbody>
+</table>
+</div>
+<hr>
+<h3 id="1-2-本文聚焦"><a href="#1-2-本文聚焦" class="headerlink" title="1.2 本文聚焦"></a>1.2 本文聚焦</h3><p>从一个 API 请求出发，追踪到最终生成 token 的完整流程，深入源码理解 vLLM v1 的架构设计。</p>
+<p><strong>阅读前提</strong>：</p>
+<ul>
+<li>了解 Transformer 基础（Attention、KV Cache）</li>
+<li>了解 Python 异步编程（async/await）</li>
+<li>有 PyTorch 使用经验</li>
+</ul>
+<hr>
+<h2 id="2-核心架构：六层分工"><a href="#2-核心架构：六层分工" class="headerlink" title="2. 核心架构：六层分工"></a>2. 核心架构：六层分工</h2><h3 id="2-1-整体架构图"><a href="#2-1-整体架构图" class="headerlink" title="2.1 整体架构图"></a>2.1 整体架构图</h3><div class="svg-figure">
+<svg viewBox="0 0 1180 980" width="100%" role="img" aria-label="vLLM API request to token generation architecture">
+  <defs>
+    <marker id="arrow-vllm-main" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M1,1 L9,5 L1,9 Z" fill="#475569"/></marker>
+    <style>
+      .vbox{fill:#ffffff;stroke:#cbd5e1;stroke-width:2;rx:18;filter:drop-shadow(0 10px 14px rgba(15,23,42,.08));}
+      .api{fill:#eff6ff;stroke:#93c5fd}.engine{fill:#f8fafc;stroke:#cbd5e1}.core{fill:#fffbeb;stroke:#fcd34d}.worker{fill:#ecfdf5;stroke:#86efac}.sample{fill:#f5f3ff;stroke:#c4b5fd}
+      .vtitle{font:700 22px 'Times New Roman','SimSun',serif;fill:#0f172a}.vsub{font:16px 'Times New Roman','SimSun',serif;fill:#475569}.vsmall{font:14px 'Times New Roman','SimSun',serif;fill:#64748b}
+      .varrow{stroke:#475569;stroke-width:2.6;fill:none;marker-end:url(#arrow-vllm-main)}.vline{stroke:#94a3b8;stroke-width:2;fill:none;stroke-dasharray:6 6}
+    </style>
+  </defs>
+
+  <rect x="250" y="40" width="680" height="110" class="vbox api"/>
+  <text x="590" y="78" text-anchor="middle" class="vtitle">API Layer</text>
+  <text x="590" y="108" text-anchor="middle" class="vsub">FastAPI / gRPC / OpenAI-compatible endpoints</text>
+  <text x="590" y="132" text-anchor="middle" class="vsmall">/v1/completions · /v1/chat/completions</text>
+  <path d="M590 150 L590 205" class="varrow"/>
+  <text x="620" y="183" class="vsmall">HTTP Request</text>
+
+  <rect x="180" y="205" width="820" height="210" class="vbox engine"/>
+  <text x="590" y="242" text-anchor="middle" class="vtitle">LLMEngine：前后处理层</text>
+  <rect x="250" y="275" width="250" height="90" class="vbox api"/>
+  <text x="375" y="312" text-anchor="middle" class="vsub">InputProcessor</text>
+  <text x="375" y="340" text-anchor="middle" class="vsmall">tokenize / parse prompt</text>
+  <rect x="680" y="275" width="250" height="90" class="vbox sample"/>
+  <text x="805" y="312" text-anchor="middle" class="vsub">OutputProcessor</text>
+  <text x="805" y="340" text-anchor="middle" class="vsmall">detokenize / stream output</text>
+  <path d="M375 365 L375 470" class="varrow"/>
+  <text x="402" y="438" class="vsmall">EngineCoreRequest</text>
+
+  <rect x="180" y="470" width="820" height="420" class="vbox core"/>
+  <text x="590" y="508" text-anchor="middle" class="vtitle">EngineCore：调度 + 执行核心</text>
+  <rect x="260" y="545" width="250" height="80" class="vbox core"/>
+  <text x="385" y="578" text-anchor="middle" class="vsub">Scheduler</text>
+  <text x="385" y="604" text-anchor="middle" class="vsmall">决定谁算多少 token</text>
+  <path d="M385 625 L385 675" class="varrow"/>
+  <text x="415" y="657" class="vsmall">SchedulerOutput</text>
+  <rect x="260" y="675" width="250" height="80" class="vbox api"/>
+  <text x="385" y="708" text-anchor="middle" class="vsub">KVCacheManager</text>
+  <text x="385" y="734" text-anchor="middle" class="vsmall">PagedAttention blocks</text>
+  <path d="M385 755 L385 805" class="varrow"/>
+  <text x="415" y="787" class="vsmall">allocated blocks</text>
+  <rect x="260" y="805" width="250" height="80" class="vbox worker"/>
+  <text x="385" y="838" text-anchor="middle" class="vsub">ModelExecutor</text>
+  <text x="385" y="864" text-anchor="middle" class="vsmall">Worker / ModelRunner</text>
+  <rect x="670" y="805" width="250" height="80" class="vbox sample"/>
+  <text x="795" y="838" text-anchor="middle" class="vsub">Sampler</text>
+  <text x="795" y="864" text-anchor="middle" class="vsmall">sample next token</text>
+  <path d="M510 845 L670 845" class="varrow"/>
+  <path d="M795 805 C795 675 805 510 805 365" class="varrow"/>
+  <text x="825" y="625" class="vsmall">EngineCoreOutput</text>
+  <path d="M680 320 L500 320" class="vline"/>
+  <text x="590" y="306" text-anchor="middle" class="vsmall">文本响应回到用户</text>
+</svg>
+</div>
+
+<h3 id="2-2-数据流转"><a href="#2-2-数据流转" class="headerlink" title="2.2 数据流转"></a>2.2 数据流转</h3><p>一个请求的数据变化：</p>
+<figure class="highlight dts"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line">用户输入 <span class="string">&quot;Hello, AI!&quot;</span></span><br><span class="line">  ↓ InputProcessor (tokenize)</span><br><span class="line">token_ids [<span class="number">15496</span>, <span class="number">11</span>, <span class="number">15000</span>, <span class="number">0</span>]</span><br><span class="line">  ↓ Scheduler (调度决策)</span><br><span class="line"><span class="class">SchedulerOutput </span>&#123;</span><br><span class="line"><span class="symbol">  scheduled_new_reqs:</span> [req_1],</span><br><span class="line"><span class="symbol">  num_scheduled_tokens:</span> &#123;req_1: <span class="number">4</span>&#125;  ← prefill <span class="number">4</span> tokens</span><br><span class="line">&#125;</span><br><span class="line">  ↓ ModelExecutor (forward)</span><br><span class="line">logits [<span class="number">1</span>, <span class="number">4</span>, <span class="number">32000</span>]  ← (batch, seq, vocab_size)</span><br><span class="line">  ↓ Sampler (采样)</span><br><span class="line"><span class="symbol">next_token_id:</span> <span class="number">9906</span>  ← <span class="string">&quot;Hi&quot;</span></span><br><span class="line">  ↓ OutputProcessor (detokenize)</span><br><span class="line">生成文本: <span class="string">&quot;Hi&quot;</span></span><br><span class="line">  ↓ 返回给用户</span><br></pre></td></tr></table></figure>
+<!-- SECTION_2_3 -->
+<h3 id="2-3-六大组件详解"><a href="#2-3-六大组件详解" class="headerlink" title="2.3 六大组件详解"></a>2.3 六大组件详解</h3><p>本节部分使用伪代码，在实际代码中会有很多校验和分支，就不赘述了。</p>
+<h4 id="1-LLMEngine：前后处理层"><a href="#1-LLMEngine：前后处理层" class="headerlink" title="(1) LLMEngine：前后处理层"></a>(1) LLMEngine：前后处理层</h4><p><strong>作用</strong>：请求的预处理和响应的后处理</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">class</span> <span class="title">LLMEngine</span>:</span></span><br><span class="line">    <span class="function"><span class="keyword">def</span> <span class="title">__init__</span>(<span class="params">self</span>):</span></span><br><span class="line">        <span class="comment"># 输入处理：tokenizer + embedding</span></span><br><span class="line">        self.input_processor = InputProcessor(tokenizer, ...)</span><br><span class="line">        </span><br><span class="line">        <span class="comment"># 核心引擎（调度+执行）</span></span><br><span class="line">        self.engine_core = EngineCoreClient.make_client(...)</span><br><span class="line">        </span><br><span class="line">        <span class="comment"># 输出处理：detokenizer</span></span><br><span class="line">        self.output_processor = OutputProcessor(tokenizer, ...)</span><br><span class="line">    </span><br><span class="line">    <span class="function"><span class="keyword">def</span> <span class="title">add_request</span>(<span class="params">self, request_id, prompt, sampling_params</span>):</span></span><br><span class="line">        <span class="comment"># 1. 预处理：prompt → token_ids</span></span><br><span class="line">        request = self.input_processor.process_inputs(</span><br><span class="line">            request_id, prompt, ...)</span><br><span class="line">        </span><br><span class="line">        <span class="comment"># 2. 注册到输出处理器</span></span><br><span class="line">        self.output_processor.add_request(request, ...)</span><br><span class="line">        </span><br><span class="line">        <span class="comment"># 3. 提交给引擎核心</span></span><br><span class="line">        self.engine_core.add_request(request)</span><br><span class="line">    </span><br><span class="line">    <span class="function"><span class="keyword">def</span> <span class="title">step</span>(<span class="params">self</span>) -&gt; <span class="built_in">list</span>[RequestOutput]:</span></span><br><span class="line">        <span class="comment"># 1. 从 EngineCore 拉取输出</span></span><br><span class="line">        outputs = self.engine_core.get_output()</span><br><span class="line">        </span><br><span class="line">        <span class="comment"># 2. 后处理：token_ids → 文本</span></span><br><span class="line">        request_outputs = self.output_processor.process_outputs(outputs)</span><br><span class="line">        </span><br><span class="line">        <span class="comment"># 3. Abort 已完成的请求</span></span><br><span class="line">        self._abort_finished_requests(request_outputs)</span><br><span class="line">        </span><br><span class="line">        <span class="keyword">return</span> request_outputs</span><br></pre></td></tr></table></figure>
+<hr>
+<h4 id="2-EngineCore：调度-执行核心"><a href="#2-EngineCore：调度-执行核心" class="headerlink" title="(2) EngineCore：调度+执行核心"></a>(2) EngineCore：调度+执行核心</h4><p><strong>作用</strong>：串联 Scheduler、KVCacheManager、ModelExecutor</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">class</span> <span class="title">EngineCore</span>:</span></span><br><span class="line">    <span class="function"><span class="keyword">def</span> <span class="title">__init__</span>(<span class="params">self</span>):</span></span><br><span class="line">        self.scheduler = Scheduler(...)</span><br><span class="line">		<span class="comment"># 这里初始化不同的executor：GPU/CPU/TPU/others</span></span><br><span class="line">        self.model_executor = executor_class(vllm_config)</span><br><span class="line">		<span class="comment"># kv cache配置</span></span><br><span class="line">		num_gpu_blocks, num_cpu_blocks, kv_cache_config = \</span><br><span class="line">            self._initialize_kv_caches(vllm_config)</span><br><span class="line">    </span><br><span class="line">    <span class="function"><span class="keyword">def</span> <span class="title">step</span>(<span class="params">self</span>):</span></span><br><span class="line">        <span class="comment"># 1. 调度：决定本步算哪些请求、各算多少 token</span></span><br><span class="line">        scheduler_output = self.scheduler.schedule()</span><br><span class="line">        </span><br><span class="line">        <span class="comment"># 2. 执行：模型 forward + 采样</span></span><br><span class="line">        model_output = self.model_executor.execute_model(</span><br><span class="line">            scheduler_output)</span><br><span class="line">        </span><br><span class="line">        <span class="comment"># 3. 更新：根据输出更新 scheduler 状态</span></span><br><span class="line">        engine_core_outputs = self.scheduler.update_from_output(</span><br><span class="line">            scheduler_output, model_output)</span><br><span class="line">        </span><br><span class="line">        <span class="keyword">return</span> engine_core_outputs</span><br></pre></td></tr></table></figure>
+<hr>
+<h4 id="3-Scheduler：请求调度器"><a href="#3-Scheduler：请求调度器" class="headerlink" title="(3) Scheduler：请求调度器"></a>(3) Scheduler：请求调度器</h4><p><strong>作用</strong>：决定”谁算多少 token”，管理三个队列</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">class</span> <span class="title">Scheduler</span>:</span></span><br><span class="line">    <span class="function"><span class="keyword">def</span> <span class="title">__init__</span>(<span class="params">self</span>):</span></span><br><span class="line">        self.waiting = RequestQueue()    <span class="comment"># 等待队列</span></span><br><span class="line">        self.running = RequestQueue()    <span class="comment"># 运行队列</span></span><br><span class="line">        self.kv_cache_manager = KVCacheManager()</span><br><span class="line">    </span><br><span class="line">    <span class="function"><span class="keyword">def</span> <span class="title">schedule</span>(<span class="params">self</span>) -&gt; SchedulerOutput:</span></span><br><span class="line">        token_budget = self.max_num_scheduled_tokens  <span class="comment"># 本步预算</span></span><br><span class="line">        scheduled_new_reqs = []</span><br><span class="line">        scheduled_running_reqs = []</span><br><span class="line">        </span><br><span class="line">        <span class="comment"># 阶段1: 调度 RUNNING 队列（优先保证 decode）</span></span><br><span class="line">        <span class="keyword">while</span> req_index &lt; <span class="built_in">len</span>(self.running) <span class="keyword">and</span> token_budget &gt; <span class="number">0</span>:</span><br><span class="line">            <span class="comment"># 本步需要计算的token数量</span></span><br><span class="line">            num_new_tokens = <span class="built_in">min</span>(</span><br><span class="line">                request.num_tokens_with_spec - request.num_computed_tokens,</span><br><span class="line">                token_budget</span><br><span class="line">            )</span><br><span class="line">            </span><br><span class="line">            <span class="comment"># 尝试分配 KV blocks</span></span><br><span class="line">            new_blocks = self.kv_cache_manager.allocate_slots(</span><br><span class="line">                request, num_new_tokens)</span><br><span class="line">            </span><br><span class="line">            <span class="keyword">if</span> new_blocks <span class="keyword">is</span> <span class="literal">None</span>:</span><br><span class="line">                <span class="comment"># 显存不足，抢占低优先级请求</span></span><br><span class="line">                self._preempt_request(lowest_priority_req)</span><br><span class="line">                <span class="keyword">continue</span></span><br><span class="line">            </span><br><span class="line">            scheduled_running_reqs.append(request)</span><br><span class="line">            token_budget -= num_new_tokens</span><br><span class="line">        </span><br><span class="line">        <span class="comment"># 阶段2: 调度 WAITING 队列（新请求入场）</span></span><br><span class="line">        <span class="keyword">if</span> token_budget &gt; <span class="number">0</span> <span class="keyword">and</span> <span class="keyword">not</span> preempted_reqs:</span><br><span class="line">            <span class="keyword">for</span> request <span class="keyword">in</span> self.waiting:</span><br><span class="line">                <span class="comment"># Prefix Caching 查询</span></span><br><span class="line">                num_computed_tokens = self.kv_cache_manager.get_computed_blocks(</span><br><span class="line">                    request)</span><br><span class="line">                </span><br><span class="line">                <span class="comment"># 计算本步需要算多少 token（Chunked Prefill）</span></span><br><span class="line">                num_new_tokens = <span class="built_in">min</span>(</span><br><span class="line">                    request.num_tokens - num_computed_tokens,</span><br><span class="line">                    token_budget,</span><br><span class="line">                    self.long_prefill_token_threshold  <span class="comment"># chunk 上限</span></span><br><span class="line">                )</span><br><span class="line">                </span><br><span class="line">                <span class="comment"># 分配 blocks</span></span><br><span class="line">                new_blocks = self.kv_cache_manager.allocate_slots(...)</span><br><span class="line">                <span class="keyword">if</span> new_blocks <span class="keyword">is</span> <span class="keyword">not</span> <span class="literal">None</span>:</span><br><span class="line">                    self.waiting.remove(request)</span><br><span class="line">                    self.running.append(request)</span><br><span class="line">                    scheduled_new_reqs.append(request)</span><br><span class="line">                    token_budget -= num_new_tokens</span><br><span class="line">        </span><br><span class="line">        <span class="keyword">return</span> SchedulerOutput(</span><br><span class="line">            scheduled_new_reqs=scheduled_new_reqs,</span><br><span class="line">            scheduled_running_reqs=scheduled_running_reqs,</span><br><span class="line">            num_scheduled_tokens=&#123;req.<span class="built_in">id</span>: num_tokens&#125;,</span><br><span class="line">        )</span><br></pre></td></tr></table></figure>
+<p><strong>关键理解</strong>：</p>
+<ul>
+<li><strong>先 running 后 waiting</strong>：保证已有请求的 decode 流畅</li>
+<li><strong>token_budget 全局共享</strong>：prefill 和 decode 混合在同一 batch</li>
+<li><strong>Chunked Prefill</strong>：长 prompt 切片，避免饥饿</li>
+</ul>
+<hr>
+<h4 id="4-KVCacheManager：显存管理"><a href="#4-KVCacheManager：显存管理" class="headerlink" title="(4) KVCacheManager：显存管理"></a>(4) KVCacheManager：显存管理</h4><p><strong>作用</strong>：管理 KV Cache 的分配和释放</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">class</span> <span class="title">KVCacheManager</span>:</span></span><br><span class="line">    <span class="function"><span class="keyword">def</span> <span class="title">__init__</span>(<span class="params">self</span>):</span></span><br><span class="line">        self.coordinator = KVCacheCoordinator()  <span class="comment"># Block 管理器</span></span><br><span class="line">    </span><br><span class="line">    <span class="function"><span class="keyword">def</span> <span class="title">allocate_slots</span>(<span class="params">self, request, num_new_tokens</span>):</span></span><br><span class="line">        <span class="string">&quot;&quot;&quot;分配物理 blocks&quot;&quot;&quot;</span></span><br><span class="line">        <span class="keyword">return</span> self.coordinator.allocate_new_blocks(</span><br><span class="line">            request, num_new_tokens)</span><br><span class="line">    </span><br><span class="line">    <span class="function"><span class="keyword">def</span> <span class="title">get_computed_blocks</span>(<span class="params">self, request</span>):</span></span><br><span class="line">        <span class="string">&quot;&quot;&quot;Prefix Caching：查询命中的 blocks&quot;&quot;&quot;</span></span><br><span class="line">        block_hashes = [<span class="built_in">hash</span>(tokens) <span class="keyword">for</span> tokens <span class="keyword">in</span> request.token_chunks]</span><br><span class="line">        <span class="keyword">return</span> self.coordinator.find_cached_blocks(block_hashes)</span><br><span class="line">    </span><br><span class="line">    <span class="function"><span class="keyword">def</span> <span class="title">free</span>(<span class="params">self, request</span>):</span></span><br><span class="line">        <span class="string">&quot;&quot;&quot;释放 request 占用的 blocks&quot;&quot;&quot;</span></span><br><span class="line">        self.coordinator.free(request.request_id)</span><br></pre></td></tr></table></figure>
+<p><strong>Block Pool 示意</strong>：<br><figure class="highlight less"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="selector-tag">Physical</span> <span class="selector-tag">Blocks</span>: <span class="selector-attr">[0]</span><span class="selector-attr">[1]</span><span class="selector-attr">[2]</span><span class="selector-attr">[3]</span><span class="selector-attr">[4]</span><span class="selector-attr">[5]</span><span class="selector-attr">[6]</span><span class="selector-attr">[7]</span>...</span><br><span class="line">                  ↑  ↑          ↑  ↑</span><br><span class="line"><span class="selector-tag">Request</span> <span class="selector-tag">1</span> <span class="selector-tag">Table</span>: <span class="selector-attr">[0, 1, 4, 5]</span>  ← 逻辑连续，物理不连续</span><br><span class="line"><span class="selector-tag">Request</span> <span class="selector-tag">2</span> <span class="selector-tag">Table</span>: <span class="selector-attr">[0, 1, 2]</span>     ← 与 <span class="selector-tag">R1</span> 共享 <span class="selector-attr">[0, 1]</span></span><br></pre></td></tr></table></figure></p>
+<hr>
+<h4 id="5-ModelExecutor-Worker-ModelRunner"><a href="#5-ModelExecutor-Worker-ModelRunner" class="headerlink" title="(5) ModelExecutor / Worker / ModelRunner"></a>(5) ModelExecutor / Worker / ModelRunner</h4><p><strong>作用</strong>：执行模型推理</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">class</span> <span class="title">GPUExecutor</span>:</span></span><br><span class="line">    <span class="function"><span class="keyword">def</span> <span class="title">execute_model</span>(<span class="params">self, scheduler_output</span>):</span></span><br><span class="line">        <span class="keyword">return</span> self.driver_worker.execute_model(scheduler_output)</span><br><span class="line"></span><br><span class="line"><span class="class"><span class="keyword">class</span> <span class="title">Worker</span>(<span class="params">WorkerBase</span>):</span></span><br><span class="line">    <span class="function"><span class="keyword">def</span> <span class="title">__init__</span>(<span class="params">self</span>):</span></span><br><span class="line">		self.device: <span class="type">Optional</span>[torch.device] </span><br><span class="line">        self.model_runner: <span class="type">Optional</span>[nn.Module]  <span class="comment"># 模型运行器</span></span><br><span class="line">    </span><br><span class="line">    <span class="function"><span class="keyword">def</span> <span class="title">load_model</span>(<span class="params">self</span>):</span></span><br><span class="line">        self.model_runner.load_model()</span><br><span class="line">    </span><br><span class="line">    <span class="function"><span class="keyword">def</span> <span class="title">execute_model</span>(<span class="params">self, scheduler_output</span>):</span></span><br><span class="line">        <span class="keyword">return</span> self.model_runner.execute_model(scheduler_output)</span><br><span class="line"></span><br><span class="line"><span class="class"><span class="keyword">class</span> <span class="title">GPUModelRunner</span>:</span></span><br><span class="line">    <span class="function"><span class="keyword">def</span> <span class="title">execute_model</span>(<span class="params">self, scheduler_output</span>):</span></span><br><span class="line">        <span class="comment"># 1. 更新 PersistentBatch 状态</span></span><br><span class="line">        self._update_states(scheduler_output)</span><br><span class="line">        </span><br><span class="line">        <span class="comment"># 2. 准备输入张量</span></span><br><span class="line">        model_inputs = self._prepare_inputs(scheduler_output)</span><br><span class="line">        </span><br><span class="line">        <span class="comment"># 3. 模型 forward</span></span><br><span class="line">        hidden_states = self.model(**model_inputs)</span><br><span class="line">        </span><br><span class="line">        <span class="comment"># 4. 采样生成 token</span></span><br><span class="line">        sampled_token_ids = self._sample(hidden_states)</span><br><span class="line">        </span><br><span class="line">        <span class="keyword">return</span> ModelExecutorOutput(sampled_token_ids=sampled_token_ids)</span><br></pre></td></tr></table></figure>
+<hr>
+<h4 id="6-Sampler-OutputProcessor"><a href="#6-Sampler-OutputProcessor" class="headerlink" title="(6) Sampler / OutputProcessor"></a>(6) Sampler / OutputProcessor</h4><p><strong>Sampler</strong>：从 logits 采样 token</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">class</span> <span class="title">Sampler</span>:</span></span><br><span class="line">    <span class="function"><span class="keyword">def</span> <span class="title">sample</span>(<span class="params">self, logits, sampling_metadata</span>):</span></span><br><span class="line">        <span class="comment"># 应用 temperature </span></span><br><span class="line">        <span class="comment"># logits = logits / temperature</span></span><br><span class="line">	    logits = self.apply_temperature(logits, </span><br><span class="line">					    sampling_metadata.temperature,</span><br><span class="line">				        sampling_metadata.all_random)</span><br><span class="line">        </span><br><span class="line">        <span class="comment"># 应用 top-k / top-p</span></span><br><span class="line">		 random_sampled, processed_logprobs = </span><br><span class="line">			 self.topk_topp_sampler(logits)</span><br><span class="line">        </span><br><span class="line">        <span class="comment"># 采样</span></span><br><span class="line">        probs = torch.softmax(logits, dim=-<span class="number">1</span>)</span><br><span class="line">        token_ids = random_sample(probs, generators)</span><br><span class="line">        </span><br><span class="line">        <span class="keyword">return</span> token_ids</span><br></pre></td></tr></table></figure>
+<p><strong>OutputProcessor</strong>：detokenize</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">class</span> <span class="title">OutputProcessor</span>:</span></span><br><span class="line">    <span class="function"><span class="keyword">def</span> <span class="title">process_outputs</span>(<span class="params">self, engine_core_outputs</span>):</span></span><br><span class="line">        outputs = []</span><br><span class="line">        <span class="keyword">for</span> output <span class="keyword">in</span> engine_core_outputs:</span><br><span class="line">            text = self.tokenizer.decode(</span><br><span class="line">                output.output_token_ids,</span><br><span class="line">                skip_special_tokens=<span class="literal">True</span></span><br><span class="line">            )</span><br><span class="line">            outputs.append(RequestOutput(text=text, ...))</span><br><span class="line">        <span class="keyword">return</span> outputs</span><br></pre></td></tr></table></figure>
+<hr>
+<h2 id="3-一个请求的完整生命周期"><a href="#3-一个请求的完整生命周期" class="headerlink" title="3. 一个请求的完整生命周期"></a>3. 一个请求的完整生命周期</h2><h3 id="3-1-接收阶段：LLM-generate-到-add-request"><a href="#3-1-接收阶段：LLM-generate-到-add-request" class="headerlink" title="3.1 接收阶段：LLM.generate 到 add_request"></a>3.1 接收阶段：LLM.generate 到 add_request</h3><p><strong>调用链</strong>：<br><figure class="highlight reasonml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="module-access"><span class="module"><span class="identifier">LLM</span>.</span></span>generate<span class="literal">()</span></span><br><span class="line">  → <span class="module-access"><span class="module"><span class="identifier">LLM</span>.</span><span class="module"><span class="identifier">_add_request</span>(</span></span>)</span><br><span class="line">  → <span class="module-access"><span class="module"><span class="identifier">LLMEngine</span>.</span></span>add<span class="constructor">_request()</span></span><br><span class="line">  → <span class="module-access"><span class="module"><span class="identifier">InputProcessor</span>.</span></span>process<span class="constructor">_inputs()</span></span><br><span class="line">  → <span class="module-access"><span class="module"><span class="identifier">EngineCore</span>.</span></span>add<span class="constructor">_request()</span></span><br><span class="line">  → <span class="module-access"><span class="module"><span class="identifier">Scheduler</span>.</span></span>add<span class="constructor">_request()</span></span><br></pre></td></tr></table></figure></p>
+<p><strong>关键源码</strong>：InputProcessor 处理不同类型的输入</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">_prompt_to_llm_inputs</span>(<span class="params">self, prompt</span>):</span></span><br><span class="line">    parsed = parse_prompt(prompt)</span><br><span class="line">    </span><br><span class="line">    <span class="keyword">if</span> parsed[<span class="string">&quot;type&quot;</span>] == <span class="string">&quot;tokens&quot;</span>:</span><br><span class="line">        <span class="comment"># 已经是 token_ids</span></span><br><span class="line">        <span class="keyword">return</span> self._process_tokens(parsed[<span class="string">&quot;content&quot;</span>])</span><br><span class="line">    </span><br><span class="line">    <span class="keyword">if</span> parsed[<span class="string">&quot;type&quot;</span>] == <span class="string">&quot;text&quot;</span>:</span><br><span class="line">        <span class="comment"># 文本 + 多模态数据</span></span><br><span class="line">        <span class="keyword">return</span> self._process_text(</span><br><span class="line">            parsed[<span class="string">&quot;content&quot;</span>],</span><br><span class="line">            tokenization_kwargs=...,</span><br><span class="line">            mm_uuids=...</span><br><span class="line">        )</span><br><span class="line">    </span><br><span class="line">    <span class="keyword">if</span> parsed[<span class="string">&quot;type&quot;</span>] == <span class="string">&quot;embeds&quot;</span>:</span><br><span class="line">        <span class="comment"># 直接是 embeddings</span></span><br><span class="line">        <span class="keyword">return</span> self._process_embeds(parsed[<span class="string">&quot;content&quot;</span>])</span><br></pre></td></tr></table></figure>
+<p><strong>支持的输入格式</strong>：</p>
+<ul>
+<li><code>str</code>：纯文本</li>
+<li><code>List[int]</code>：token_ids</li>
+<li><code>Dict</code>：多模态输入（文本 + 图片）</li>
+<li><code>torch.Tensor</code>：embeddings</li>
+</ul>
+<hr>
+<h3 id="3-2-调度阶段：Scheduler-schedule-的核心逻辑"><a href="#3-2-调度阶段：Scheduler-schedule-的核心逻辑" class="headerlink" title="3.2 调度阶段：Scheduler.schedule 的核心逻辑"></a>3.2 调度阶段：Scheduler.schedule 的核心逻辑</h3><p><strong>完整调用流程</strong>：<br><figure class="highlight reasonml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="module-access"><span class="module"><span class="identifier">LLM</span>.</span><span class="module"><span class="identifier">_run_engine</span>(</span></span>)</span><br><span class="line">  → <span class="module-access"><span class="module"><span class="identifier">LLMEngine</span>.</span></span>step<span class="literal">()</span></span><br><span class="line">  → <span class="module-access"><span class="module"><span class="identifier">EngineCore</span>.</span></span>step<span class="literal">()</span></span><br><span class="line">  → <span class="module-access"><span class="module"><span class="identifier">Scheduler</span>.</span></span>schedule<span class="literal">()</span></span><br><span class="line">    → <span class="module-access"><span class="module"><span class="identifier">KVCacheManager</span>.</span></span>allocate<span class="constructor">_slots()</span></span><br><span class="line">    → <span class="module-access"><span class="module"><span class="identifier">KVCacheManager</span>.</span></span>get<span class="constructor">_computed_blocks()</span>  ← Prefix Caching</span><br></pre></td></tr></table></figure></p>
+<h4 id="关键逻辑-1：计算本次需要处理的-token-数"><a href="#关键逻辑-1：计算本次需要处理的-token-数" class="headerlink" title="关键逻辑 1：计算本次需要处理的 token 数"></a>关键逻辑 1：计算本次需要处理的 token 数</h4><figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 还差多少 token 要算</span></span><br><span class="line">num_new_tokens = (</span><br><span class="line">    request.num_tokens_with_spec +</span><br><span class="line">    request.num_output_placeholders -</span><br><span class="line">    request.num_computed_tokens</span><br><span class="line">)</span><br><span class="line"></span><br><span class="line"><span class="comment"># Chunked Prefill 的 chunk 上限</span></span><br><span class="line"><span class="keyword">if</span> <span class="number">0</span> &lt; self.long_prefill_token_threshold &lt; num_new_tokens:</span><br><span class="line">    num_new_tokens = self.long_prefill_token_threshold</span><br><span class="line"></span><br><span class="line"><span class="comment"># 不超过剩余预算</span></span><br><span class="line">num_new_tokens = <span class="built_in">min</span>(num_new_tokens, token_budget)</span><br><span class="line"></span><br><span class="line"><span class="comment"># 不超过模型最大长度</span></span><br><span class="line">num_new_tokens = <span class="built_in">min</span>(</span><br><span class="line">    num_new_tokens,</span><br><span class="line">    self.max_model_len - request.num_computed_tokens</span><br><span class="line">)</span><br></pre></td></tr></table></figure>
+<p><strong>判断 Prefill vs Decode</strong>：</p>
+<ul>
+<li><code>num_new_tokens == 1</code>：Decode（生成阶段）</li>
+<li><code>num_new_tokens &gt; 1</code>：Prefill（处理 prompt 阶段）</li>
+</ul>
+<hr>
+<h4 id="关键逻辑-2：抢占机制"><a href="#关键逻辑-2：抢占机制" class="headerlink" title="关键逻辑 2：抢占机制"></a>关键逻辑 2：抢占机制</h4><figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><span class="line">new_blocks = self.kv_cache_manager.allocate_slots(</span><br><span class="line">    request, num_new_tokens, ...)</span><br><span class="line"></span><br><span class="line"><span class="keyword">if</span> new_blocks <span class="keyword">is</span> <span class="literal">None</span>:</span><br><span class="line">    <span class="comment"># 显存不足，需要抢占</span></span><br><span class="line">    <span class="keyword">if</span> self.policy == SchedulingPolicy.PRIORITY:</span><br><span class="line">        <span class="comment"># 抢占最低优先级的请求</span></span><br><span class="line">        preempted_req = <span class="built_in">max</span>(</span><br><span class="line">            self.running,</span><br><span class="line">            key=<span class="keyword">lambda</span> r: (r.priority, r.arrival_time)</span><br><span class="line">        )</span><br><span class="line">    <span class="keyword">else</span>:</span><br><span class="line">        <span class="comment"># FCFS：抢占队尾（最新的）</span></span><br><span class="line">        preempted_req = self.running.pop()</span><br><span class="line">    </span><br><span class="line">    <span class="comment"># 释放 KV Cache（v1 recompute 策略）</span></span><br><span class="line">    self.kv_cache_manager.free(preempted_req)</span><br><span class="line">    preempted_req.status = RequestStatus.PREEMPTED</span><br><span class="line">    preempted_req.num_computed_tokens = <span class="number">0</span>  <span class="comment"># 下次重新计算</span></span><br><span class="line">    </span><br><span class="line">    <span class="comment"># 放回等待队列</span></span><br><span class="line">    self.waiting.prepend_request(preempted_req)</span><br></pre></td></tr></table></figure>
+<p><strong>v1 的抢占策略</strong>：</p>
+<ul>
+<li>直接释放 KV Cache（不 swap 到 CPU）</li>
+<li>下次调度时重新计算 prefill</li>
+<li>优点：不占 CPU 内存，代码简单</li>
+<li>缺点：重复计算（但 prefill 通常很快）</li>
+</ul>
+<hr>
+<h4 id="关键逻辑-3：Prefix-Caching"><a href="#关键逻辑-3：Prefix-Caching" class="headerlink" title="关键逻辑 3：Prefix Caching"></a>关键逻辑 3：Prefix Caching</h4><figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">if</span> request.num_computed_tokens == <span class="number">0</span>:</span><br><span class="line">    <span class="comment"># 本地缓存查询</span></span><br><span class="line">    new_computed_blocks, num_local_cached_tokens = \</span><br><span class="line">        self.kv_cache_manager.get_computed_blocks(request)</span><br><span class="line">    </span><br><span class="line">    <span class="comment"># 外部缓存查询（P/D disaggregation 场景）</span></span><br><span class="line">    <span class="keyword">if</span> self.connector <span class="keyword">is</span> <span class="keyword">not</span> <span class="literal">None</span>:</span><br><span class="line">        num_external_cached_tokens, load_async = \</span><br><span class="line">            self.connector.get_num_new_matched_tokens(</span><br><span class="line">                request, num_local_cached_tokens)</span><br><span class="line">    </span><br><span class="line">    <span class="comment"># 总缓存命中数</span></span><br><span class="line">    num_computed_tokens = (</span><br><span class="line">        num_local_cached_tokens + num_external_cached_tokens</span><br><span class="line">    )</span><br><span class="line">    </span><br><span class="line">    <span class="comment"># 更新统计</span></span><br><span class="line">    request.prefill_stats.num_cached_tokens = num_computed_tokens</span><br></pre></td></tr></table></figure>
+<p><strong>工作原理</strong>：</p>
+<ol>
+<li>计算 request 的 block hash（基于 token_ids）</li>
+<li>查询 hash 是否在缓存中</li>
+<li>命中的 block 直接复用，跳过计算</li>
+</ol>
+<hr>
+<h4 id="关键逻辑-4：Chunked-Prefill"><a href="#关键逻辑-4：Chunked-Prefill" class="headerlink" title="关键逻辑 4：Chunked Prefill"></a>关键逻辑 4：Chunked Prefill</h4><figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 剩余 token 数</span></span><br><span class="line">num_new_tokens = request.num_tokens - num_computed_tokens</span><br><span class="line"></span><br><span class="line"><span class="comment"># 如果没开 chunked prefill 且放不下，跳过</span></span><br><span class="line"><span class="keyword">if</span> <span class="keyword">not</span> self.scheduler_config.enable_chunked_prefill \</span><br><span class="line">    <span class="keyword">and</span> num_new_tokens &gt; token_budget:</span><br><span class="line">    <span class="comment"># 本步不调度，等下一步</span></span><br><span class="line">    <span class="keyword">continue</span></span><br><span class="line"></span><br><span class="line"><span class="comment"># 开了 chunked prefill，切到 budget 允许的大小</span></span><br><span class="line">num_new_tokens = <span class="built_in">min</span>(num_new_tokens, token_budget)</span><br></pre></td></tr></table></figure>
+<p><strong>效果</strong>：<br><figure class="highlight css"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">传统（无 chunked prefill）:</span><br><span class="line">Step <span class="number">1</span>: [<span class="built_in">Req1_prefill</span>(<span class="number">2000</span> tok)]  ← 独占</span><br><span class="line">Step <span class="number">2</span>: [Req1_decode, Req2_prefill, Req3_prefill]</span><br><span class="line"></span><br><span class="line">Chunked Prefill:</span><br><span class="line">Step <span class="number">1</span>: [<span class="built_in">Req1_chunk</span>(<span class="number">512</span>), <span class="built_in">Req2_prefill</span>(<span class="number">10</span>), <span class="built_in">Req3_prefill</span>(<span class="number">10</span>)]</span><br><span class="line">Step <span class="number">2</span>: [<span class="built_in">Req1_chunk</span>(<span class="number">512</span>), Req2_decode, Req3_decode]</span><br><span class="line">Step <span class="number">3</span>: [<span class="built_in">Req1_chunk</span>(<span class="number">512</span>), Req2_decode, Req3_decode]</span><br></pre></td></tr></table></figure></p>
+<hr>
+<h3 id="3-3-执行阶段：Worker-execute-model"><a href="#3-3-执行阶段：Worker-execute-model" class="headerlink" title="3.3 执行阶段：Worker.execute_model"></a>3.3 执行阶段：Worker.execute_model</h3><p><strong>调用链</strong>：<br><figure class="highlight reasonml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="module-access"><span class="module"><span class="identifier">EngineCore</span>.</span></span>step<span class="literal">()</span></span><br><span class="line">  → <span class="module-access"><span class="module"><span class="identifier">ModelExecutor</span>.</span></span>execute<span class="constructor">_model(<span class="params">scheduler_output</span>)</span></span><br><span class="line">  → <span class="module-access"><span class="module"><span class="identifier">Worker</span>.</span></span>execute<span class="constructor">_model(<span class="params">scheduler_output</span>)</span></span><br><span class="line">  → <span class="module-access"><span class="module"><span class="identifier">GPUModelRunner</span>.</span></span>execute<span class="constructor">_model(<span class="params">scheduler_output</span>)</span></span><br></pre></td></tr></table></figure></p>
+<h4 id="3-3-1-更新状态（-update-states）"><a href="#3-3-1-更新状态（-update-states）" class="headerlink" title="3.3.1 更新状态（_update_states）"></a>3.3.1 更新状态（_update_states）</h4><p><strong>作用</strong>：将 scheduler 的调度决策应用到 ModelRunner 的内部状态。</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">_update_states</span>(<span class="params">self, scheduler_output: SchedulerOutput</span>):</span></span><br><span class="line">    <span class="comment"># 1. 处理新请求（首次调度）</span></span><br><span class="line">    <span class="keyword">for</span> new_req_data <span class="keyword">in</span> scheduler_output.scheduled_new_reqs:</span><br><span class="line">        self.input_batch.add_request(</span><br><span class="line">            request_id=new_req_data.request_id,</span><br><span class="line">            prompt_token_ids=new_req_data.prompt_token_ids,</span><br><span class="line">            block_ids=new_req_data.block_ids,</span><br><span class="line">            ...</span><br><span class="line">        )</span><br><span class="line">    </span><br><span class="line">    <span class="comment"># 2. 更新 running 请求（增量）</span></span><br><span class="line">    <span class="keyword">for</span> cached_req_data <span class="keyword">in</span> scheduler_output.scheduled_cached_reqs:</span><br><span class="line">        self.input_batch.update_num_computed_tokens(</span><br><span class="line">            cached_req_data.request_id,</span><br><span class="line">            cached_req_data.num_computed_tokens,</span><br><span class="line">        )</span><br><span class="line">    </span><br><span class="line">    <span class="comment"># 3. 移除已完成的请求</span></span><br><span class="line">    <span class="keyword">for</span> req_id <span class="keyword">in</span> scheduler_output.finished_req_ids:</span><br><span class="line">        self.input_batch.remove_request(req_id)</span><br></pre></td></tr></table></figure>
+<p><strong>关键理解</strong>：</p>
+<ul>
+<li><strong>PersistentBatch</strong>：v1 的 batch 是”持久化”的，不是每步重建</li>
+<li><strong>增量更新</strong>：只传新增的 token 和 block，减少 IPC 开销</li>
+<li><strong>相比 v0 的优势</strong>：省去每步重建 batch 的开销（约 5-10% 提速）</li>
+</ul>
+<hr>
+<h4 id="3-3-2-准备输入（-prepare-inputs）"><a href="#3-3-2-准备输入（-prepare-inputs）" class="headerlink" title="3.3.2 准备输入（_prepare_inputs）"></a>3.3.2 准备输入（_prepare_inputs）</h4><p><strong>作用</strong>：构造模型 forward 需要的张量。</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">_prepare_inputs</span>(<span class="params">self, scheduler_output</span>):</span></span><br><span class="line">    input_ids = []</span><br><span class="line">    positions = []</span><br><span class="line">    </span><br><span class="line">    <span class="comment"># 1. 收集所有要计算的 token</span></span><br><span class="line">    <span class="keyword">for</span> req_id, num_tokens <span class="keyword">in</span> scheduler_output.num_scheduled_tokens.items():</span><br><span class="line">        req_state = self.input_batch.get_request(req_id)</span><br><span class="line">        </span><br><span class="line">        <span class="keyword">if</span> req_state.is_prefill:</span><br><span class="line">            <span class="comment"># Prefill: 多个 token</span></span><br><span class="line">            start = req_state.num_computed_tokens</span><br><span class="line">            end = start + num_tokens</span><br><span class="line">            input_ids.extend(req_state.token_ids[start:end])</span><br><span class="line">            positions.extend(<span class="built_in">range</span>(start, end))</span><br><span class="line">        <span class="keyword">else</span>:</span><br><span class="line">            <span class="comment"># Decode: 只有 1 个 token</span></span><br><span class="line">            input_ids.append(req_state.last_token_id)</span><br><span class="line">            positions.append(req_state.num_computed_tokens)</span><br><span class="line">    </span><br><span class="line">    <span class="comment"># 2. 构造 Attention Metadata（PagedAttention 需要）</span></span><br><span class="line">    attn_metadata = self.attn_backend.make_metadata(</span><br><span class="line">        <span class="comment"># 每个 request 的 block table</span></span><br><span class="line">        block_tables=self._get_block_tables(),</span><br><span class="line">        <span class="comment"># token → 物理 slot 的映射</span></span><br><span class="line">        slot_mapping=self._get_slot_mapping(),</span><br><span class="line">        <span class="comment"># 每个 request 在 batch 中的边界（前缀和）</span></span><br><span class="line">        query_start_loc=self._get_query_start_loc(),</span><br><span class="line">        <span class="comment"># 每个 request 的序列长度</span></span><br><span class="line">        seq_lens=self._get_seq_lens(),</span><br><span class="line">    )</span><br><span class="line">    </span><br><span class="line">    <span class="keyword">return</span> &#123;</span><br><span class="line">        <span class="string">&quot;input_ids&quot;</span>: torch.tensor(input_ids, device=<span class="string">&quot;cuda&quot;</span>),</span><br><span class="line">        <span class="string">&quot;positions&quot;</span>: torch.tensor(positions, device=<span class="string">&quot;cuda&quot;</span>),</span><br><span class="line">        <span class="string">&quot;attn_metadata&quot;</span>: attn_metadata,</span><br><span class="line">    &#125;</span><br></pre></td></tr></table></figure>
+<p><strong>Prefill vs Decode 的输入差异</strong>：</p>
+<div class="table-container">
+<table>
+<thead>
+<tr>
+<th>字段</th>
+<th>Prefill</th>
+<th>Decode</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>input_ids.shape</code></td>
+<td><code>[sum(prompt_lens)]</code></td>
+<td><code>[batch_size]</code></td>
+</tr>
+<tr>
+<td><code>positions</code></td>
+<td><code>[0,1,2,...,L-1]</code> per req</td>
+<td><code>[L]</code> per req</td>
+</tr>
+<tr>
+<td><code>query_start_loc</code></td>
+<td><code>[0, L1, L1+L2, ...]</code></td>
+<td><code>[0, 1, 2, ...]</code></td>
+</tr>
+<tr>
+<td><code>block_tables</code></td>
+<td>新分配的 blocks</td>
+<td>包含历史所有 blocks</td>
+</tr>
+</tbody>
+</table>
+</div>
+<hr>
+<h4 id="3-3-3-模型推理（forward）"><a href="#3-3-3-模型推理（forward）" class="headerlink" title="3.3.3 模型推理（forward）"></a>3.3.3 模型推理（forward）</h4><figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">hidden_states = self.model(</span><br><span class="line">    input_ids=input_ids,           <span class="comment"># [num_tokens]</span></span><br><span class="line">    positions=positions,           <span class="comment"># [num_tokens]</span></span><br><span class="line">    kv_caches=self.kv_caches,      <span class="comment"># 显存中的 KV Cache</span></span><br><span class="line">    attn_metadata=attn_metadata,   <span class="comment"># PagedAttention metadata</span></span><br><span class="line">)</span><br><span class="line"><span class="comment"># 输出：[num_tokens, hidden_size]</span></span><br></pre></td></tr></table></figure>
+<p><strong>Transformer 层内部</strong>（以 Llama 为例）：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">class</span> <span class="title">LlamaDecoderLayer</span>:</span></span><br><span class="line">    <span class="function"><span class="keyword">def</span> <span class="title">forward</span>(<span class="params">self, hidden_states, kv_cache, attn_metadata</span>):</span></span><br><span class="line">        <span class="comment"># 1. Attention（使用 PagedAttention）</span></span><br><span class="line">        residual = hidden_states</span><br><span class="line">        hidden_states = self.input_layernorm(hidden_states)</span><br><span class="line">        hidden_states = self.self_attn(</span><br><span class="line">            hidden_states,</span><br><span class="line">            kv_cache=kv_cache,</span><br><span class="line">            attn_metadata=attn_metadata,  <span class="comment"># ← 关键：block_tables 传入</span></span><br><span class="line">        )</span><br><span class="line">        hidden_states = residual + hidden_states</span><br><span class="line">        </span><br><span class="line">        <span class="comment"># 2. FFN</span></span><br><span class="line">        residual = hidden_states</span><br><span class="line">        hidden_states = self.post_attention_layernorm(hidden_states)</span><br><span class="line">        hidden_states = self.mlp(hidden_states)</span><br><span class="line">        hidden_states = residual + hidden_states</span><br><span class="line">        </span><br><span class="line">        <span class="keyword">return</span> hidden_states</span><br></pre></td></tr></table></figure>
+<p><strong>Self-Attention 调用 PagedAttention</strong>：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">class</span> <span class="title">LlamaAttention</span>:</span></span><br><span class="line">    <span class="function"><span class="keyword">def</span> <span class="title">forward</span>(<span class="params">self, hidden_states, kv_cache, attn_metadata</span>):</span></span><br><span class="line">        <span class="comment"># 1. QKV 投影</span></span><br><span class="line">        qkv = self.qkv_proj(hidden_states)</span><br><span class="line">        q, k, v = qkv.split(...)</span><br><span class="line">        </span><br><span class="line">        <span class="comment"># 2. 写入 KV Cache（PagedAttention）</span></span><br><span class="line">        <span class="comment"># 根据 attn_metadata.slot_mapping 写入指定 slot</span></span><br><span class="line">        cache_ops.reshape_and_cache(k, v, kv_cache, slot_mapping)</span><br><span class="line">        </span><br><span class="line">        <span class="comment"># 3. Attention 计算（PagedAttention kernel）</span></span><br><span class="line">        <span class="comment"># 使用 block_tables 索引历史 KV</span></span><br><span class="line">        output = paged_attention(</span><br><span class="line">            q, kv_cache,</span><br><span class="line">            block_tables=attn_metadata.block_tables,</span><br><span class="line">            context_lens=attn_metadata.context_lens,</span><br><span class="line">        )</span><br><span class="line">        </span><br><span class="line">        <span class="comment"># 4. 输出投影</span></span><br><span class="line">        output = self.o_proj(output)</span><br><span class="line">        <span class="keyword">return</span> output</span><br></pre></td></tr></table></figure>
+<hr>
+<h4 id="3-3-4-采样（-sample）"><a href="#3-3-4-采样（-sample）" class="headerlink" title="3.3.4 采样（_sample）"></a>3.3.4 采样（_sample）</h4><figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">_sample</span>(<span class="params">self, hidden_states, scheduler_output</span>):</span></span><br><span class="line">    <span class="comment"># 1. LM Head：hidden_states → logits</span></span><br><span class="line">    logits = self.model.lm_head(hidden_states)</span><br><span class="line">    <span class="comment"># logits.shape: [num_tokens, vocab_size]</span></span><br><span class="line">    </span><br><span class="line">    <span class="comment"># 2. 提取每个 request 的最后一个 token 的 logits</span></span><br><span class="line">    last_token_logits = []</span><br><span class="line">    <span class="keyword">for</span> req_id <span class="keyword">in</span> scheduler_output.num_scheduled_tokens:</span><br><span class="line">        last_idx = self._get_last_token_index(req_id)</span><br><span class="line">        last_token_logits.append(logits[last_idx])</span><br><span class="line">    </span><br><span class="line">    <span class="comment"># 3. 调用 Sampler</span></span><br><span class="line">    sampled_token_ids = self.sampler(</span><br><span class="line">        logits=torch.stack(last_token_logits),</span><br><span class="line">        sampling_metadata=self._get_sampling_metadata(),</span><br><span class="line">    )</span><br><span class="line">    </span><br><span class="line">    <span class="keyword">return</span> sampled_token_ids  <span class="comment"># [batch_size]</span></span><br></pre></td></tr></table></figure>
+<p><strong>为什么只对最后一个 token 采样</strong>？</p>
+<ul>
+<li><strong>Prefill</strong>：计算了所有 prompt token 的 hidden states，但只需最后一个的 logits 生成第一个输出 token</li>
+<li><strong>Decode</strong>：每次只计算 1 个 token，就是那个需要采样的</li>
+</ul>
+<hr>
+<h4 id="3-3-5-完整执行流程图"><a href="#3-3-5-完整执行流程图" class="headerlink" title="3.3.5 完整执行流程图"></a>3.3.5 完整执行流程图</h4><div class="svg-figure">
+<svg viewBox="0 0 1180 860" width="100%" role="img" aria-label="vLLM ModelRunner execution flow">
+  <defs>
+    <marker id="arrow-exec" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M1,1 L9,5 L1,9 Z" fill="#475569"/></marker>
+    <style>
+      .ebox{fill:#ffffff;stroke:#cbd5e1;stroke-width:2;rx:16;filter:drop-shadow(0 8px 12px rgba(15,23,42,.08));}
+      .ein{fill:#eff6ff;stroke:#93c5fd}.estate{fill:#f8fafc;stroke:#cbd5e1}.etensor{fill:#ecfdf5;stroke:#86efac}.efwd{fill:#fffbeb;stroke:#fcd34d}.esample{fill:#f5f3ff;stroke:#c4b5fd}
+      .etitle{font:700 20px 'Times New Roman','SimSun',serif;fill:#0f172a}.esub{font:15px 'Times New Roman','SimSun',serif;fill:#475569}.esm{font:14px 'Times New Roman','SimSun',serif;fill:#64748b}
+      .earrow{stroke:#475569;stroke-width:2.4;fill:none;marker-end:url(#arrow-exec)}
+    </style>
+  </defs>
+
+  <rect x="410" y="30" width="360" height="70" class="ebox ein"/>
+  <text x="590" y="59" text-anchor="middle" class="etitle">scheduler_output</text>
+  <text x="590" y="82" text-anchor="middle" class="esm">本步调度决策</text>
+  <path d="M590 100 L590 145" class="earrow"/>
+
+  <rect x="170" y="145" width="360" height="110" class="ebox estate"/>
+  <text x="350" y="182" text-anchor="middle" class="etitle">_update_states</text>
+  <text x="350" y="210" text-anchor="middle" class="esub">更新 PersistentBatch</text>
+  <text x="350" y="234" text-anchor="middle" class="esm">新增 / 更新 / 移除请求</text>
+  <rect x="650" y="145" width="360" height="110" class="ebox estate"/>
+  <text x="830" y="184" text-anchor="middle" class="etitle">PersistentBatch</text>
+  <text x="830" y="214" text-anchor="middle" class="esub">跨 step 保留 batch 状态</text>
+  <path d="M530 200 L650 200" class="earrow"/>
+
+  <path d="M350 255 L350 310" class="earrow"/>
+  <rect x="170" y="310" width="360" height="120" class="ebox etensor"/>
+  <text x="350" y="348" text-anchor="middle" class="etitle">_prepare_inputs</text>
+  <text x="350" y="376" text-anchor="middle" class="esub">构造 forward 张量</text>
+  <text x="350" y="402" text-anchor="middle" class="esm">input_ids · positions · attn_metadata</text>
+  <rect x="650" y="310" width="360" height="120" class="ebox etensor"/>
+  <text x="830" y="348" text-anchor="middle" class="etitle">Attention Metadata</text>
+  <text x="830" y="376" text-anchor="middle" class="esub">block_tables / slot_mapping</text>
+  <text x="830" y="402" text-anchor="middle" class="esm">PagedAttention 读取 KV Cache 的索引</text>
+  <path d="M530 370 L650 370" class="earrow"/>
+
+  <path d="M350 430 L350 485" class="earrow"/>
+  <rect x="170" y="485" width="360" height="130" class="ebox efwd"/>
+  <text x="350" y="524" text-anchor="middle" class="etitle">model.forward</text>
+  <text x="350" y="552" text-anchor="middle" class="esub">Transformer 推理</text>
+  <text x="350" y="578" text-anchor="middle" class="esm">Embedding → DecoderLayer × N → LM Head</text>
+  <rect x="650" y="485" width="360" height="130" class="ebox efwd"/>
+  <text x="830" y="524" text-anchor="middle" class="etitle">PagedAttention</text>
+  <text x="830" y="552" text-anchor="middle" class="esub">读写 KV Cache</text>
+  <text x="830" y="578" text-anchor="middle" class="esm">输出 logits [num_tokens, vocab]</text>
+  <path d="M530 550 L650 550" class="earrow"/>
+
+  <path d="M350 615 L350 670" class="earrow"/>
+  <rect x="170" y="670" width="360" height="110" class="ebox esample"/>
+  <text x="350" y="708" text-anchor="middle" class="etitle">_sample</text>
+  <text x="350" y="736" text-anchor="middle" class="esub">只取每个请求最后一个 token 的 logits</text>
+  <text x="350" y="760" text-anchor="middle" class="esm">Temperature / Top-k / Top-p</text>
+  <rect x="650" y="670" width="360" height="110" class="ebox ein"/>
+  <text x="830" y="708" text-anchor="middle" class="etitle">ModelExecutorOutput</text>
+  <text x="830" y="738" text-anchor="middle" class="esub">sampled_token_ids: [...]</text>
+  <path d="M530 725 L650 725" class="earrow"/>
+</svg>
+</div>
+
+<hr>
+<h3 id="3-4-输出阶段：从-logits-到用户文本"><a href="#3-4-输出阶段：从-logits-到用户文本" class="headerlink" title="3.4 输出阶段：从 logits 到用户文本"></a>3.4 输出阶段：从 logits 到用户文本</h3><h4 id="3-4-1-Scheduler-更新状态"><a href="#3-4-1-Scheduler-更新状态" class="headerlink" title="3.4.1 Scheduler 更新状态"></a>3.4.1 Scheduler 更新状态</h4><figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">update_from_output</span>(<span class="params">self, scheduler_output, model_output</span>):</span></span><br><span class="line">    <span class="keyword">for</span> req_id, sampled_token_id <span class="keyword">in</span> model_output.sampled_token_ids.items():</span><br><span class="line">        request = self.get_request(req_id)</span><br><span class="line">        </span><br><span class="line">        <span class="comment"># 1. 更新已计算 token 数</span></span><br><span class="line">        num_new_tokens = scheduler_output.num_scheduled_tokens[req_id]</span><br><span class="line">        request.num_computed_tokens += num_new_tokens</span><br><span class="line">        </span><br><span class="line">        <span class="comment"># 2. 添加生成的 token（如果是 decode 阶段完成）</span></span><br><span class="line">        <span class="keyword">if</span> request.num_computed_tokens &gt;= request.num_prompt_tokens:</span><br><span class="line">            request.output_token_ids.append(sampled_token_id)</span><br><span class="line">        </span><br><span class="line">        <span class="comment"># 3. 检查是否完成</span></span><br><span class="line">        <span class="keyword">if</span> self._is_finished(request, sampled_token_id):</span><br><span class="line">            request.status = RequestStatus.FINISHED</span><br><span class="line">            self.running.remove(request)</span><br><span class="line">            self.finished_req_ids.append(req_id)</span><br><span class="line">            self.kv_cache_manager.free(request)  <span class="comment"># 释放 KV Cache</span></span><br></pre></td></tr></table></figure>
+<p><strong>完成条件</strong>（满足任一）：</p>
+<ul>
+<li>生成了 <code>max_tokens</code> 个 token</li>
+<li>遇到停止词（如 <code>&lt;|endoftext|&gt;</code>）</li>
+<li>遇到 EOS token</li>
+<li>用户主动 abort</li>
+</ul>
+<hr>
+<h4 id="3-4-2-OutputProcessor-解码"><a href="#3-4-2-OutputProcessor-解码" class="headerlink" title="3.4.2 OutputProcessor 解码"></a>3.4.2 OutputProcessor 解码</h4><figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">process_outputs</span>(<span class="params">self, engine_core_outputs</span>):</span></span><br><span class="line">    request_outputs = []</span><br><span class="line">    </span><br><span class="line">    <span class="keyword">for</span> output <span class="keyword">in</span> engine_core_outputs:</span><br><span class="line">        <span class="comment"># 1. Detokenize（token_ids → 文本）</span></span><br><span class="line">        text = self.tokenizer.decode(</span><br><span class="line">            output.output_token_ids,</span><br><span class="line">            skip_special_tokens=<span class="literal">True</span>,</span><br><span class="line">        )</span><br><span class="line">        </span><br><span class="line">        <span class="comment"># 2. 构造 RequestOutput</span></span><br><span class="line">        request_output = RequestOutput(</span><br><span class="line">            request_id=output.request_id,</span><br><span class="line">            prompt=output.prompt,</span><br><span class="line">            outputs=[CompletionOutput(</span><br><span class="line">                text=text,</span><br><span class="line">                token_ids=output.output_token_ids,</span><br><span class="line">                finish_reason=output.finish_reason,</span><br><span class="line">            )],</span><br><span class="line">            finished=output.finished,</span><br><span class="line">        )</span><br><span class="line">        request_outputs.append(request_output)</span><br><span class="line">    </span><br><span class="line">    <span class="keyword">return</span> request_outputs</span><br></pre></td></tr></table></figure>
+<hr>
+<h4 id="3-4-3-流式输出（Streaming）"><a href="#3-4-3-流式输出（Streaming）" class="headerlink" title="3.4.3 流式输出（Streaming）"></a>3.4.3 流式输出（Streaming）</h4><figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">async</span> <span class="function"><span class="keyword">def</span> <span class="title">generate_stream</span>(<span class="params">prompt, sampling_params</span>):</span></span><br><span class="line">    request_id = <span class="keyword">await</span> engine.add_request(...)</span><br><span class="line">    </span><br><span class="line">    prev_text = <span class="string">&quot;&quot;</span></span><br><span class="line">    <span class="keyword">async</span> <span class="keyword">for</span> output <span class="keyword">in</span> engine.step_async():</span><br><span class="line">        <span class="keyword">if</span> output.request_id == request_id:</span><br><span class="line">            current_text = output.outputs[<span class="number">0</span>].text</span><br><span class="line">            </span><br><span class="line">            <span class="comment"># 只返回增量部分</span></span><br><span class="line">            new_text = current_text[<span class="built_in">len</span>(prev_text):]</span><br><span class="line">            prev_text = current_text</span><br><span class="line">            </span><br><span class="line">            <span class="keyword">yield</span> new_text</span><br><span class="line">            </span><br><span class="line">            <span class="keyword">if</span> output.finished:</span><br><span class="line">                <span class="keyword">break</span></span><br></pre></td></tr></table></figure>
+<p><strong>实现关键</strong>：</p>
+<ul>
+<li>OutputProcessor 维护每个 request 的 <code>prev_text</code></li>
+<li>每次只返回 <code>new_text = current_text[len(prev_text):]</code></li>
+<li>用户看到”打字机”效果</li>
+</ul>
+<hr>
+<h2 id="4-PagedAttention：核心创新深入解析"><a href="#4-PagedAttention：核心创新深入解析" class="headerlink" title="4. PagedAttention：核心创新深入解析"></a>4. PagedAttention：核心创新深入解析</h2><h3 id="4-1-传统-KV-Cache-的问题"><a href="#4-1-传统-KV-Cache-的问题" class="headerlink" title="4.1 传统 KV Cache 的问题"></a>4.1 传统 KV Cache 的问题</h3><h4 id="内存布局对比"><a href="#内存布局对比" class="headerlink" title="内存布局对比"></a>内存布局对比</h4><p><strong>传统方案</strong>：预分配连续显存</p>
+<figure class="highlight prolog"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="symbol">Request</span> <span class="number">1</span> (max_len=<span class="number">2048</span>):</span><br><span class="line">[<span class="symbol">Token_0</span>][<span class="symbol">Token_1</span>][<span class="symbol">Token_2</span>]...[<span class="symbol">Token_100</span>][████padding████] ← <span class="number">95</span><span class="comment">% 浪费</span></span><br><span class="line"></span><br><span class="line"><span class="symbol">Request</span> <span class="number">2</span> (max_len=<span class="number">2048</span>):</span><br><span class="line">[<span class="symbol">Token_0</span>][<span class="symbol">Token_1</span>]...[<span class="symbol">Token_50</span>][██████padding██████] ← <span class="number">97.5</span><span class="comment">% 浪费</span></span><br><span class="line"></span><br><span class="line">实际利用率：约 <span class="number">20</span><span class="comment">%</span></span><br></pre></td></tr></table></figure>
+<p><strong>三大问题</strong>：</p>
+<ol>
+<li><strong>内存碎片</strong>：必须按 <code>max_tokens</code> 预留，但实际可能只用 5%</li>
+<li><strong>无法共享</strong>：两个请求即使 prompt 相同，也要各自分配</li>
+<li><strong>静态分配</strong>：一旦分配就无法改变大小</li>
+</ol>
+<p><strong>数据</strong>（vLLM 论文）：</p>
+<ul>
+<li>平均利用率：20.4%</li>
+<li>最差情况：&lt; 10%（长 max_tokens 但实际生成很短）</li>
+</ul>
+<hr>
+<h3 id="4-2-PagedAttention-的解决方案"><a href="#4-2-PagedAttention-的解决方案" class="headerlink" title="4.2 PagedAttention 的解决方案"></a>4.2 PagedAttention 的解决方案</h3><h4 id="核心思想：虚拟内存-Paging"><a href="#核心思想：虚拟内存-Paging" class="headerlink" title="核心思想：虚拟内存 Paging"></a>核心思想：虚拟内存 Paging</h4><p>像操作系统管理内存一样管理 KV Cache：</p>
+<div class="svg-figure">
+<svg viewBox="0 0 1180 620" width="100%" role="img" aria-label="PagedAttention physical block pool and request block tables">
+  <defs>
+    <marker id="arrow-block" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M1,1 L9,5 L1,9 Z" fill="#475569"/></marker>
+    <style>
+      .bbox{fill:#ffffff;stroke:#cbd5e1;stroke-width:2;rx:14;filter:drop-shadow(0 8px 12px rgba(15,23,42,.08));}
+      .phys{fill:#eff6ff;stroke:#93c5fd}.shared{fill:#dbeafe;stroke:#60a5fa}.private1{fill:#ecfdf5;stroke:#86efac}.private2{fill:#f5f3ff;stroke:#c4b5fd}
+      .btitle{font:700 20px 'Times New Roman','SimSun',serif;fill:#0f172a}.bsub{font:15px 'Times New Roman','SimSun',serif;fill:#475569}.bsm{font:14px 'Times New Roman','SimSun',serif;fill:#64748b}.bid{font:700 18px 'Times New Roman','SimSun',serif;fill:#0f172a}
+      .barrow{stroke:#475569;stroke-width:2.2;fill:none;marker-end:url(#arrow-block)}
+    </style>
+  </defs>
+
+  <text x="590" y="48" text-anchor="middle" class="btitle">物理 Block Pool（GPU 显存）</text>
+  <text x="590" y="76" text-anchor="middle" class="bsub">KV Cache 被切成固定大小的物理 block，请求只保存逻辑到物理的映射表</text>
+  <g transform="translate(150 115)">
+    <rect x="0" y="0" width="100" height="70" class="bbox shared"/><text x="50" y="43" text-anchor="middle" class="bid">0</text>
+    <rect x="105" y="0" width="100" height="70" class="bbox shared"/><text x="155" y="43" text-anchor="middle" class="bid">1</text>
+    <rect x="210" y="0" width="100" height="70" class="bbox phys"/><text x="260" y="43" text-anchor="middle" class="bid">2</text>
+    <rect x="315" y="0" width="100" height="70" class="bbox phys"/><text x="365" y="43" text-anchor="middle" class="bid">3</text>
+    <rect x="420" y="0" width="100" height="70" class="bbox private1"/><text x="470" y="43" text-anchor="middle" class="bid">4</text>
+    <rect x="525" y="0" width="100" height="70" class="bbox private1"/><text x="575" y="43" text-anchor="middle" class="bid">5</text>
+    <rect x="630" y="0" width="100" height="70" class="bbox private2"/><text x="680" y="43" text-anchor="middle" class="bid">6</text>
+    <rect x="735" y="0" width="100" height="70" class="bbox phys"/><text x="785" y="43" text-anchor="middle" class="bid">7</text>
+  </g>
+  <text x="590" y="230" text-anchor="middle" class="bsm">蓝色 block 0/1 被多个请求共享；绿色和紫色 block 是各请求自己的后续 token</text>
+
+  <rect x="110" y="285" width="420" height="210" class="bbox private1"/>
+  <text x="320" y="322" text-anchor="middle" class="btitle">Request 1 Block Table</text>
+  <text x="320" y="352" text-anchor="middle" class="bsub">逻辑连续：[0, 1, 2, 3]</text>
+  <text x="320" y="382" text-anchor="middle" class="bsub">物理映射：[0, 1, 4, 5]</text>
+  <g transform="translate(180 415)">
+    <rect x="0" y="0" width="62" height="48" class="bbox shared"/><text x="31" y="31" text-anchor="middle" class="bid">0</text>
+    <rect x="72" y="0" width="62" height="48" class="bbox shared"/><text x="103" y="31" text-anchor="middle" class="bid">1</text>
+    <rect x="144" y="0" width="62" height="48" class="bbox private1"/><text x="175" y="31" text-anchor="middle" class="bid">4</text>
+    <rect x="216" y="0" width="62" height="48" class="bbox private1"/><text x="247" y="31" text-anchor="middle" class="bid">5</text>
+  </g>
+
+  <rect x="650" y="285" width="420" height="210" class="bbox private2"/>
+  <text x="860" y="322" text-anchor="middle" class="btitle">Request 2 Block Table</text>
+  <text x="860" y="352" text-anchor="middle" class="bsub">逻辑连续：[0, 1, 2]</text>
+  <text x="860" y="382" text-anchor="middle" class="bsub">物理映射：[0, 1, 6]</text>
+  <g transform="translate(755 415)">
+    <rect x="0" y="0" width="62" height="48" class="bbox shared"/><text x="31" y="31" text-anchor="middle" class="bid">0</text>
+    <rect x="72" y="0" width="62" height="48" class="bbox shared"/><text x="103" y="31" text-anchor="middle" class="bid">1</text>
+    <rect x="144" y="0" width="62" height="48" class="bbox private2"/><text x="175" y="31" text-anchor="middle" class="bid">6</text>
+  </g>
+
+  <path d="M250 415 C250 300 200 260 200 185" class="barrow"/>
+  <path d="M322 415 C322 300 305 260 305 185" class="barrow"/>
+  <path d="M394 415 C394 300 620 260 620 185" class="barrow"/>
+  <path d="M466 415 C466 300 725 260 725 185" class="barrow"/>
+  <path d="M786 415 C786 300 200 255 200 185" class="barrow"/>
+  <path d="M858 415 C858 300 305 255 305 185" class="barrow"/>
+  <path d="M930 415 C930 300 830 260 830 185" class="barrow"/>
+  <text x="590" y="552" text-anchor="middle" class="bsub">逻辑地址连续，物理显存可以不连续；相同前缀通过引用同一批物理 block 实现共享。</text>
+</svg>
+</div>
+
+<h4 id="Block-管理细节"><a href="#Block-管理细节" class="headerlink" title="Block 管理细节"></a>Block 管理细节</h4><p><strong>Block 结构</strong>：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line">block_size = <span class="number">16</span>  <span class="comment"># 每个 block 存 16 个 token</span></span><br><span class="line"></span><br><span class="line"><span class="comment"># Llama-7B 单个 block 占用</span></span><br><span class="line">per_block_size = (</span><br><span class="line">    block_size *       <span class="comment"># 16 tokens</span></span><br><span class="line">    <span class="number">32</span> *               <span class="comment"># 32 layers</span></span><br><span class="line">    <span class="number">2</span> *                <span class="comment"># K + V</span></span><br><span class="line">    <span class="number">32</span> *               <span class="comment"># 32 heads</span></span><br><span class="line">    <span class="number">128</span> *              <span class="comment"># head_dim</span></span><br><span class="line">    <span class="number">2</span>                  <span class="comment"># fp16 (2 bytes)</span></span><br><span class="line">) = <span class="number">8</span>,<span class="number">388</span>,<span class="number">608</span> <span class="built_in">bytes</span> ≈ <span class="number">8</span> MB</span><br><span class="line"></span><br><span class="line"><span class="comment"># A100-80GB 能存多少 block？</span></span><br><span class="line"><span class="comment"># 假设模型占 14GB，剩余 66GB</span></span><br><span class="line">num_blocks = <span class="number">66</span> * <span class="number">1024</span> / <span class="number">8</span> = <span class="number">8</span>,<span class="number">448</span> blocks</span><br><span class="line">max_tokens = <span class="number">8</span>,<span class="number">448</span> * <span class="number">16</span> = <span class="number">135</span>,<span class="number">168</span> tokens</span><br></pre></td></tr></table></figure>
+<hr>
+<h4 id="Block-Table-映射"><a href="#Block-Table-映射" class="headerlink" title="Block Table 映射"></a>Block Table 映射</h4><p><strong>CUDA Kernel 中的查找</strong>（简化伪代码）：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">paged_attention</span>(<span class="params">Q, block_table, kv_cache</span>):</span></span><br><span class="line">    <span class="string">&quot;&quot;&quot;</span></span><br><span class="line"><span class="string">    Q: [num_queries, d_k]</span></span><br><span class="line"><span class="string">    block_table: [num_blocks]  逻辑 block ID → 物理 block ID</span></span><br><span class="line"><span class="string">    kv_cache: [num_physical_blocks, block_size, d_k]</span></span><br><span class="line"><span class="string">    &quot;&quot;&quot;</span></span><br><span class="line">    output = []</span><br><span class="line">    </span><br><span class="line">    <span class="keyword">for</span> query_idx <span class="keyword">in</span> <span class="built_in">range</span>(<span class="built_in">len</span>(Q)):</span><br><span class="line">        <span class="comment"># 1. 计算这个 query 对应的逻辑 block 和 offset</span></span><br><span class="line">        logical_block_idx = query_idx // BLOCK_SIZE</span><br><span class="line">        offset = query_idx % BLOCK_SIZE</span><br><span class="line">        </span><br><span class="line">        <span class="comment"># 2. 查表：逻辑 block → 物理 block</span></span><br><span class="line">        physical_block_id = block_table[logical_block_idx]</span><br><span class="line">        </span><br><span class="line">        <span class="comment"># 3. 从物理 block 读取 K, V</span></span><br><span class="line">        K = kv_cache[physical_block_id][offset]</span><br><span class="line">        V = kv_cache[physical_block_id][offset]</span><br><span class="line">        </span><br><span class="line">        <span class="comment"># 4. 计算 Attention</span></span><br><span class="line">        attn_score = dot_product(Q[query_idx], K) / sqrt(d_k)</span><br><span class="line">        output.append(attn_score * V)</span><br><span class="line">    </span><br><span class="line">    <span class="keyword">return</span> output</span><br></pre></td></tr></table></figure>
+<p><strong>实际 CUDA Kernel</strong>（位于 <code>csrc/attention/paged_attention_v2.cu</code>）：</p>
+<ul>
+<li>使用 shared memory 优化</li>
+<li>Vectorized 访存（一次读 128 bits）</li>
+<li>Warp-level reduction</li>
+</ul>
+<hr>
+<h3 id="4-3-基于-Block-的高级特性"><a href="#4-3-基于-Block-的高级特性" class="headerlink" title="4.3 基于 Block 的高级特性"></a>4.3 基于 Block 的高级特性</h3><h4 id="4-3-1-Prefix-Caching（共享前缀）"><a href="#4-3-1-Prefix-Caching（共享前缀）" class="headerlink" title="4.3.1 Prefix Caching（共享前缀）"></a>4.3.1 Prefix Caching（共享前缀）</h4><p><strong>场景</strong>：多个请求共享相同的 system prompt</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># System Prompt (100 tokens) → Block [0, 1, 2, 3, 4, 5]</span></span><br><span class="line">system_prompt_blocks = [<span class="number">0</span>, <span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">4</span>, <span class="number">5</span>]</span><br><span class="line"></span><br><span class="line"><span class="comment"># Request 1</span></span><br><span class="line">block_table_1 = system_prompt_blocks + [<span class="number">10</span>, <span class="number">11</span>, <span class="number">12</span>]  <span class="comment"># 自己的 blocks</span></span><br><span class="line"></span><br><span class="line"><span class="comment"># Request 2</span></span><br><span class="line">block_table_2 = system_prompt_blocks + [<span class="number">20</span>, <span class="number">21</span>]      <span class="comment"># 共享前 6 个</span></span><br><span class="line"></span><br><span class="line"><span class="comment"># Request 3</span></span><br><span class="line">block_table_3 = system_prompt_blocks + [<span class="number">30</span>, <span class="number">31</span>, <span class="number">32</span>]  <span class="comment"># 共享前 6 个</span></span><br></pre></td></tr></table></figure>
+<p><strong>引用计数管理</strong>：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line">block_ref_count = &#123;</span><br><span class="line">    <span class="number">0</span>: <span class="number">3</span>,  <span class="comment"># 被 3 个请求共享</span></span><br><span class="line">    <span class="number">1</span>: <span class="number">3</span>,</span><br><span class="line">    <span class="number">2</span>: <span class="number">3</span>,</span><br><span class="line">    <span class="number">3</span>: <span class="number">3</span>,</span><br><span class="line">    <span class="number">4</span>: <span class="number">3</span>,</span><br><span class="line">    <span class="number">5</span>: <span class="number">3</span>,</span><br><span class="line">    <span class="number">10</span>: <span class="number">1</span>,  <span class="comment"># 只属于 Request 1</span></span><br><span class="line">    <span class="number">11</span>: <span class="number">1</span>,</span><br><span class="line">    ...</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment"># 释放 Request 1 时</span></span><br><span class="line"><span class="keyword">for</span> block_id <span class="keyword">in</span> request1.block_table:</span><br><span class="line">    block_ref_count[block_id] -= <span class="number">1</span></span><br><span class="line">    <span class="keyword">if</span> block_ref_count[block_id] == <span class="number">0</span>:</span><br><span class="line">        free_block(block_id)  <span class="comment"># 引用计数归零才真正释放</span></span><br></pre></td></tr></table></figure>
+<p><strong>Hash 算法</strong>：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">compute_block_hash</span>(<span class="params">token_ids</span>):</span></span><br><span class="line">    <span class="string">&quot;&quot;&quot;</span></span><br><span class="line"><span class="string">    计算一个 block 的 hash，用于查找缓存</span></span><br><span class="line"><span class="string">    &quot;&quot;&quot;</span></span><br><span class="line">    <span class="keyword">return</span> <span class="built_in">hash</span>(<span class="built_in">tuple</span>(token_ids))</span><br><span class="line"></span><br><span class="line"><span class="comment"># 缓存查找</span></span><br><span class="line">cached_blocks = &#123;&#125;</span><br><span class="line"><span class="keyword">for</span> block_idx, token_chunk <span class="keyword">in</span> <span class="built_in">enumerate</span>(chunks(request.token_ids, <span class="number">16</span>)):</span><br><span class="line">    block_hash = compute_block_hash(token_chunk)</span><br><span class="line">    <span class="keyword">if</span> block_hash <span class="keyword">in</span> cached_blocks:</span><br><span class="line">        <span class="comment"># 命中缓存，复用已有 block</span></span><br><span class="line">        block_table[block_idx] = cached_blocks[block_hash]</span><br><span class="line">        block_ref_count[cached_blocks[block_hash]] += <span class="number">1</span></span><br><span class="line">    <span class="keyword">else</span>:</span><br><span class="line">        <span class="comment"># 未命中，分配新 block</span></span><br><span class="line">        new_block = allocate_block()</span><br><span class="line">        block_table[block_idx] = new_block</span><br><span class="line">        cached_blocks[block_hash] = new_block</span><br></pre></td></tr></table></figure>
+<p><strong>效果数据</strong>：</p>
+<ul>
+<li>命中缓存时 TTFT 降低 <strong>5-10 倍</strong></li>
+<li>多用户共享 system prompt 场景，显存占用降低 <strong>50-70%</strong></li>
+</ul>
+<hr>
+<h4 id="4-3-2-Copy-on-Write（写时复制）"><a href="#4-3-2-Copy-on-Write（写时复制）" class="headerlink" title="4.3.2 Copy-on-Write（写时复制）"></a>4.3.2 Copy-on-Write（写时复制）</h4><p><strong>场景</strong>：Parallel Sampling（一个 prompt 生成多个答案）</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 初始状态：所有 sample 共享 prompt blocks</span></span><br><span class="line">prompt_blocks = [<span class="number">0</span>, <span class="number">1</span>, <span class="number">2</span>]  <span class="comment"># &quot;写一首诗&quot;</span></span><br><span class="line"></span><br><span class="line"><span class="comment"># n=3 个 sample</span></span><br><span class="line">sample_1_table = prompt_blocks  <span class="comment"># 共享</span></span><br><span class="line">sample_2_table = prompt_blocks  <span class="comment"># 共享</span></span><br><span class="line">sample_3_table = prompt_blocks  <span class="comment"># 共享</span></span><br><span class="line"></span><br><span class="line"><span class="comment"># 第一次生成（decode）</span></span><br><span class="line"><span class="comment"># Sample 1 需要写入新 token，触发 copy-on-write</span></span><br><span class="line">sample_1_table = [<span class="number">0</span>, <span class="number">1</span>, <span class="number">2</span>, <span class="number">10</span>]  <span class="comment"># 复制了一份</span></span><br><span class="line">sample_2_table = [<span class="number">0</span>, <span class="number">1</span>, <span class="number">2</span>]      <span class="comment"># 仍然共享</span></span><br><span class="line">sample_3_table = [<span class="number">0</span>, <span class="number">1</span>, <span class="number">2</span>]      <span class="comment"># 仍然共享</span></span><br><span class="line"></span><br><span class="line"><span class="comment"># 后续生成</span></span><br><span class="line">sample_1_table = [<span class="number">0</span>, <span class="number">1</span>, <span class="number">2</span>, <span class="number">10</span>, <span class="number">11</span>, <span class="number">12</span>]  <span class="comment"># 独立</span></span><br><span class="line">sample_2_table = [<span class="number">0</span>, <span class="number">1</span>, <span class="number">2</span>, <span class="number">20</span>, <span class="number">21</span>, <span class="number">22</span>]  <span class="comment"># 独立</span></span><br><span class="line">sample_3_table = [<span class="number">0</span>, <span class="number">1</span>, <span class="number">2</span>, <span class="number">30</span>, <span class="number">31</span>, <span class="number">32</span>]  <span class="comment"># 独立</span></span><br></pre></td></tr></table></figure>
+<p><strong>效果</strong>：</p>
+<ul>
+<li><code>n=10</code> 时，显存占用约 <strong>2x</strong>（而不是 10x）</li>
+<li>特别适合 Best-of-N 采样</li>
+</ul>
+<hr>
+<h4 id="4-3-3-动态-Block-分配"><a href="#4-3-3-动态-Block-分配" class="headerlink" title="4.3.3 动态 Block 分配"></a>4.3.3 动态 Block 分配</h4><p><strong>传统方式</strong>（必须预分配）：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 必须提前决定 max_tokens</span></span><br><span class="line">request.kv_cache = allocate_continuous(max_tokens=<span class="number">2048</span>)</span><br><span class="line"><span class="comment"># 即使只生成 10 个 token，也占 2048 个 token 的显存</span></span><br></pre></td></tr></table></figure>
+<p><strong>PagedAttention</strong>（按需分配）：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 初始只分配 prompt 需要的 blocks</span></span><br><span class="line">request.block_table = allocate_blocks(num_prompt_tokens // <span class="number">16</span>)</span><br><span class="line"></span><br><span class="line"><span class="comment"># 每生成 1 个 token，检查是否需要新 block</span></span><br><span class="line"><span class="keyword">if</span> num_generated % <span class="number">16</span> == <span class="number">0</span>:</span><br><span class="line">    new_block = allocate_block()</span><br><span class="line">    request.block_table.append(new_block)</span><br><span class="line"></span><br><span class="line"><span class="comment"># 生成结束，立即释放</span></span><br><span class="line">free_blocks(request.block_table)</span><br></pre></td></tr></table></figure>
+<p><strong>效果</strong>：</p>
+<ul>
+<li>实际生成长度 &lt;&lt; max_tokens 时，节省大量显存</li>
+<li>可以支持更大的 batch size</li>
+</ul>
+<hr>
+<h2 id="5-性能数据对比"><a href="#5-性能数据对比" class="headerlink" title="5. 性能数据对比"></a>5. 性能数据对比</h2><h4 id="官方-Benchmark（A100-80GB，Llama-13B）"><a href="#官方-Benchmark（A100-80GB，Llama-13B）" class="headerlink" title="官方 Benchmark（A100-80GB，Llama-13B）"></a>官方 Benchmark（A100-80GB，Llama-13B）</h4><div class="table-container">
+<table>
+<thead>
+<tr>
+<th>指标</th>
+<th>HuggingFace</th>
+<th>vLLM</th>
+<th>提升</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>显存利用率</strong></td>
+<td>20.4%</td>
+<td>85.3%</td>
+<td><strong>4.2x</strong></td>
+</tr>
+<tr>
+<td><strong>吞吐量 (req/s)</strong></td>
+<td>5.2</td>
+<td>53.7</td>
+<td><strong>10.3x</strong></td>
+</tr>
+<tr>
+<td><strong>TTFT (无缓存)</strong></td>
+<td>2.1s</td>
+<td>1.8s</td>
+<td><strong>1.2x</strong></td>
+</tr>
+<tr>
+<td><strong>TTFT (缓存命中)</strong></td>
+<td>2.1s</td>
+<td>0.3s</td>
+<td><strong>7x</strong></td>
+</tr>
+<tr>
+<td><strong>P99 延迟</strong></td>
+<td>18.5s</td>
+<td>3.2s</td>
+<td><strong>5.8x</strong></td>
+</tr>
+</tbody>
+</table>
+</div>
+<h4 id="不同-Batch-Size-下的吞吐量"><a href="#不同-Batch-Size-下的吞吐量" class="headerlink" title="不同 Batch Size 下的吞吐量"></a>不同 Batch Size 下的吞吐量</h4><div class="table-container">
+<table>
+<thead>
+<tr>
+<th>Batch Size</th>
+<th>HF (tok/s)</th>
+<th>vLLM (tok/s)</th>
+<th>加速比</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>42</td>
+<td>48</td>
+<td>1.1x</td>
+</tr>
+<tr>
+<td>8</td>
+<td>280</td>
+<td>1,120</td>
+<td>4.0x</td>
+</tr>
+<tr>
+<td>32</td>
+<td>1,050</td>
+<td>4,380</td>
+<td>4.2x</td>
+</tr>
+<tr>
+<td>128</td>
+<td>2,100</td>
+<td>16,800</td>
+<td>8.0x</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p><strong>结论</strong>：Batch Size 越大，vLLM 优势越明显。</p>
+<hr>
+<h3 id="5-1-Block-Size-的权衡"><a href="#5-1-Block-Size-的权衡" class="headerlink" title="5.1 Block Size 的权衡"></a>5.1 Block Size 的权衡</h3><div class="table-container">
+<table>
+<thead>
+<tr>
+<th>Block Size</th>
+<th>优点</th>
+<th>缺点</th>
+<th>适用场景</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>8 tokens</strong></td>
+<td>碎片极少（&lt;5%）</td>
+<td>Block table 开销大</td>
+<td>短文本、精确控制</td>
+</tr>
+<tr>
+<td><strong>16 tokens</strong></td>
+<td>平衡点</td>
+<td>-</td>
+<td><strong>默认推荐</strong></td>
+</tr>
+<tr>
+<td><strong>32 tokens</strong></td>
+<td>Block table 小</td>
+<td>碎片多（平均 16 tokens 浪费）</td>
+<td>长文本</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p><strong>vLLM 默认</strong>：16 tokens（经验最优值）</p>
+<p><strong>自定义</strong>：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">llm = LLM(</span><br><span class="line">    model=<span class="string">&quot;llama-7b&quot;</span>,</span><br><span class="line">    block_size=<span class="number">32</span>,  <span class="comment"># 可调整</span></span><br><span class="line">)</span><br></pre></td></tr></table></figure>
+<h3 id="5-2-自研加速卡上的测试"><a href="#5-2-自研加速卡上的测试" class="headerlink" title="5.2 自研加速卡上的测试"></a>5.2 自研加速卡上的测试</h3><p>不同 <code>max_num_seqs</code> 的影响：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">configs = [<span class="number">1</span>, <span class="number">8</span>, <span class="number">32</span>, <span class="number">128</span>, <span class="number">256</span>]</span><br><span class="line"><span class="keyword">for</span> max_seqs <span class="keyword">in</span> configs:</span><br><span class="line">    llm = LLM(model=<span class="string">&quot;...&quot;</span>, max_num_seqs=max_seqs)</span><br></pre></td></tr></table></figure>
+<p>Latency 结果：</p>
+<p><img src="/images/vllm-local-latency.png" alt="不同 max_num_seqs 下的 Latency 结果"></p>
+<p>Throughput 结果：</p>
+<p><img src="/images/vllm-local-throughput.png" alt="不同 max_num_seqs 下的 Throughput 结果"></p>
+<hr>
+<h2 id="6-总结与下期预告"><a href="#6-总结与下期预告" class="headerlink" title="6. 总结与下期预告"></a>6. 总结与下期预告</h2><h3 id="6-1-核心要点回顾"><a href="#6-1-核心要点回顾" class="headerlink" title="6.1 核心要点回顾"></a>6.1 核心要点回顾</h3><p>本文从一个 API 请求出发，完整追踪了 vLLM v1 的执行流程：</p>
+<h4 id="六层架构"><a href="#六层架构" class="headerlink" title="六层架构"></a>六层架构</h4><ol>
+<li><strong>API Layer</strong>：HTTP 入口，兼容 OpenAI API</li>
+<li><strong>LLMEngine</strong>：前后处理（tokenize/detokenize）</li>
+<li><strong>EngineCore</strong>：调度+执行核心</li>
+<li><strong>Scheduler</strong>：请求调度器（三队列管理）</li>
+<li><strong>KVCacheManager</strong>：PagedAttention 显存管理</li>
+<li><strong>ModelExecutor</strong>：模型推理（Worker/ModelRunner）</li>
+</ol>
+<h4 id="完整生命周期"><a href="#完整生命周期" class="headerlink" title="完整生命周期"></a>完整生命周期</h4><figure class="highlight sqf"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">用户请求</span><br><span class="line">  ↓ <span class="number">3.1</span> 接收（tokenize）</span><br><span class="line">add_request → InputProcessor → EngineCore</span><br><span class="line">  ↓ <span class="number">3.2</span> 调度（Scheduler.schedule）</span><br><span class="line">选择 running / waiting → 分配 KV blocks → SchedulerOutput</span><br><span class="line">  ↓ <span class="number">3.3</span> 执行（ModelExecutor）</span><br><span class="line"><span class="variable">_update_states</span> → <span class="variable">_prepare_inputs</span> → forward → <span class="variable">_sample</span></span><br><span class="line">  ↓ <span class="number">3.4</span> 输出（OutputProcessor）</span><br><span class="line">update_from_output → detokenize → RequestOutput</span><br><span class="line">返回用户</span><br></pre></td></tr></table></figure>
+<h4 id="PagedAttention-的四大特性"><a href="#PagedAttention-的四大特性" class="headerlink" title="PagedAttention 的四大特性"></a>PagedAttention 的四大特性</h4><ol>
+<li><strong>Block 管理</strong>：像虚拟内存一样管理 KV Cache</li>
+<li><strong>Prefix Caching</strong>：跨请求共享前缀</li>
+<li><strong>Copy-on-Write</strong>：并行采样节省显存</li>
+<li><strong>动态分配</strong>：按需分配，用完释放</li>
+</ol>
+<hr>
+<h3 id="6-2-与传统方案对比"><a href="#6-2-与传统方案对比" class="headerlink" title="6.2 与传统方案对比"></a>6.2 与传统方案对比</h3><div class="table-container">
+<table>
+<thead>
+<tr>
+<th>维度</th>
+<th>HuggingFace Transformers</th>
+<th>vLLM</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>批处理</strong></td>
+<td>Static Batching</td>
+<td>Continuous Batching</td>
+</tr>
+<tr>
+<td><strong>KV Cache</strong></td>
+<td>连续分配，无法共享</td>
+<td>PagedAttention，block 共享</td>
+</tr>
+<tr>
+<td><strong>长 prompt</strong></td>
+<td>阻塞整个 batch</td>
+<td>Chunked Prefill，切片处理</td>
+</tr>
+<tr>
+<td><strong>抢占</strong></td>
+<td>不支持</td>
+<td>支持 recompute/swap</td>
+</tr>
+<tr>
+<td><strong>显存利用率</strong></td>
+<td>20-30%</td>
+<td>80-90%</td>
+</tr>
+<tr>
+<td><strong>吞吐量</strong></td>
+<td>基准</td>
+<td><strong>10-24x</strong></td>
+</tr>
+<tr>
+<td><strong>代码复杂度</strong></td>
+<td>简单</td>
+<td>复杂</td>
+</tr>
+</tbody>
+</table>
+</div>
+<hr>
+<h3 id="6-3-适用场景"><a href="#6-3-适用场景" class="headerlink" title="6.3 适用场景"></a>6.3 适用场景</h3><p><strong>vLLM 最适合</strong>：</p>
+<ul>
+<li>✅ 高并发服务（如 ChatBot API）</li>
+<li>✅ 批量推理任务（如文档批量摘要）</li>
+<li>✅ 多轮对话（Prefix Caching 收益大）</li>
+<li>✅ 长上下文场景（Chunked Prefill 关键）</li>
+<li>✅ Best-of-N 采样（Copy-on-Write 优化）</li>
+</ul>
+<p><strong>不适合</strong>：</p>
+<ul>
+<li>❌ 单个请求的绝对最低延迟（vLLM 有调度开销）</li>
+<li>❌ 模型训练（vLLM 只做推理）</li>
+<li>❌ 需要修改模型结构的场景（vLLM 对模型有约束）</li>
+</ul>
+<hr>
+<h3 id="6-4-下一篇预告"><a href="#6-4-下一篇预告" class="headerlink" title="6.4 下一篇预告"></a>6.4 下一篇预告</h3><p><strong>《vLLM 架构源码解析（二）：PagedAttention CUDA Kernel 深度剖析》</strong></p>
+<p>将深入以下内容：</p>
+<ol>
+<li><p><strong>FlashAttention 原理</strong></p>
+<ul>
+<li>Online Softmax 算法</li>
+<li>Tile 机制与内存访问优化</li>
+<li>HBM vs SRAM 的取舍</li>
+</ul>
+</li>
+<li><p><strong>PagedAttention v2 Kernel 源码</strong></p>
+<ul>
+<li>逐行解读 <code>csrc/attention/paged_attention_v2.cu</code></li>
+<li>Thread Block 的任务分配</li>
+<li>Shared Memory 的使用技巧</li>
+</ul>
+</li>
+<li><p><strong>Prefix Caching 实现细节</strong></p>
+<ul>
+<li>Hash 算法选择</li>
+<li>引用计数的原子操作</li>
+<li>LRU 淘汰策略</li>
+</ul>
+</li>
+<li><p><strong>性能 Profiling</strong></p>
+<ul>
+<li>用 Nsight Compute 分析 kernel 性能</li>
+<li>找出瓶颈并优化</li>
+</ul>
+</li>
+<li><p><strong>实战案例</strong></p>
+<ul>
+<li>长上下文场景（32K tokens）优化</li>
+<li>多用户场景（100+ 并发）调优</li>
+</ul>
+</li>
+</ol>
+<hr>
+<h2 id="参考资料"><a href="#参考资料" class="headerlink" title="参考资料"></a>参考资料</h2><h3 id="官方资源"><a href="#官方资源" class="headerlink" title="官方资源"></a>官方资源</h3><ol>
+<li><strong>vLLM 论文</strong>：<a target="_blank" rel="noopener" href="https://arxiv.org/abs/2309.06180">Efficient Memory Management for Large Language Model Serving with PagedAttention</a> (SOSP 2023)</li>
+<li><strong>vLLM GitHub</strong>：<a target="_blank" rel="noopener" href="https://github.com/vllm-project/vllm">https://github.com/vllm-project/vllm</a></li>
+<li><strong>vLLM 官方文档</strong>：<a target="_blank" rel="noopener" href="https://docs.vllm.ai/">https://docs.vllm.ai/</a></li>
+<li><strong>FlashAttention 论文</strong>：<a target="_blank" rel="noopener" href="https://arxiv.org/abs/2205.14135">https://arxiv.org/abs/2205.14135</a></li>
+<li><strong>FlashAttention-2 论文</strong>：<a target="_blank" rel="noopener" href="https://arxiv.org/abs/2307.08691">https://arxiv.org/abs/2307.08691</a></li>
+</ol>
+<h3 id="源码路径速查"><a href="#源码路径速查" class="headerlink" title="源码路径速查"></a>源码路径速查</h3><div class="table-container">
+<table>
+<thead>
+<tr>
+<th>组件</th>
+<th>路径</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>LLMEngine</td>
+<td><code>vllm/v1/engine/llm_engine.py</code></td>
+</tr>
+<tr>
+<td>EngineCore</td>
+<td><code>vllm/v1/engine/core.py</code></td>
+</tr>
+<tr>
+<td>InputProcessor</td>
+<td><code>vllm/v1/engine/processor.py</code></td>
+</tr>
+<tr>
+<td>OutputProcessor</td>
+<td><code>vllm/v1/engine/output_processor.py</code></td>
+</tr>
+<tr>
+<td>Scheduler</td>
+<td><code>vllm/v1/core/sched/scheduler.py</code></td>
+</tr>
+<tr>
+<td>KVCacheManager</td>
+<td><code>vllm/v1/core/kv_cache_manager.py</code></td>
+</tr>
+<tr>
+<td>Worker</td>
+<td><code>vllm/v1/worker/gpu_worker.py</code></td>
+</tr>
+<tr>
+<td>ModelRunner</td>
+<td><code>vllm/v1/worker/gpu_model_runner.py</code></td>
+</tr>
+<tr>
+<td>Sampler</td>
+<td><code>vllm/model_executor/layers/sampler.py</code></td>
+</tr>
+<tr>
+<td>PagedAttention Kernel</td>
+<td><code>csrc/attention/paged_attention_v2.cu</code></td>
+</tr>
+</tbody>
+</table>
+</div>
+<h2 id="附录：快速上手代码"><a href="#附录：快速上手代码" class="headerlink" title="附录：快速上手代码"></a>附录：快速上手代码</h2><h3 id="A-最简单的使用"><a href="#A-最简单的使用" class="headerlink" title="A. 最简单的使用"></a>A. 最简单的使用</h3><figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">from</span> vllm <span class="keyword">import</span> LLM, SamplingParams</span><br><span class="line"></span><br><span class="line"><span class="comment"># 创建 LLM 实例</span></span><br><span class="line">llm = LLM(model=<span class="string">&quot;meta-llama/Llama-2-7b-hf&quot;</span>)</span><br><span class="line"></span><br><span class="line"><span class="comment"># 采样参数</span></span><br><span class="line">sampling_params = SamplingParams(</span><br><span class="line">    temperature=<span class="number">0.8</span>,</span><br><span class="line">    top_p=<span class="number">0.95</span>,</span><br><span class="line">    max_tokens=<span class="number">128</span>,</span><br><span class="line">)</span><br><span class="line"></span><br><span class="line"><span class="comment"># 批量推理</span></span><br><span class="line">prompts = [</span><br><span class="line">    <span class="string">&quot;Hello, my name is&quot;</span>,</span><br><span class="line">    <span class="string">&quot;The president of the US is&quot;</span>,</span><br><span class="line">    <span class="string">&quot;The capital of France is&quot;</span>,</span><br><span class="line">]</span><br><span class="line"></span><br><span class="line">outputs = llm.generate(prompts, sampling_params)</span><br><span class="line"></span><br><span class="line"><span class="keyword">for</span> output <span class="keyword">in</span> outputs:</span><br><span class="line">    prompt = output.prompt</span><br><span class="line">    generated_text = output.outputs[<span class="number">0</span>].text</span><br><span class="line">    <span class="built_in">print</span>(<span class="string">f&quot;Prompt: <span class="subst">&#123;prompt!r&#125;</span>, Generated: <span class="subst">&#123;generated_text!r&#125;</span>&quot;</span>)</span><br></pre></td></tr></table></figure>
+<h3 id="B-启用-Prefix-Caching"><a href="#B-启用-Prefix-Caching" class="headerlink" title="B. 启用 Prefix Caching"></a>B. 启用 Prefix Caching</h3><figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line">llm = LLM(</span><br><span class="line">    model=<span class="string">&quot;meta-llama/Llama-2-7b-hf&quot;</span>,</span><br><span class="line">    enable_prefix_caching=<span class="literal">True</span>,  <span class="comment"># 开启前缀缓存</span></span><br><span class="line">    block_size=<span class="number">16</span>,               <span class="comment"># block 大小</span></span><br><span class="line">)</span><br><span class="line"></span><br><span class="line"><span class="comment"># 相同 system prompt 的多个查询会自动共享</span></span><br><span class="line">system_prompt = <span class="string">&quot;You are a helpful assistant.&quot;</span></span><br><span class="line">queries = [</span><br><span class="line">    <span class="string">f&quot;<span class="subst">&#123;system_prompt&#125;</span>\nUser: What is Python?&quot;</span>,</span><br><span class="line">    <span class="string">f&quot;<span class="subst">&#123;system_prompt&#125;</span>\nUser: What is AI?&quot;</span>,</span><br><span class="line">    <span class="string">f&quot;<span class="subst">&#123;system_prompt&#125;</span>\nUser: What is ML?&quot;</span>,</span><br><span class="line">]</span><br><span class="line"></span><br><span class="line"><span class="comment"># 第一个请求会缓存 system prompt</span></span><br><span class="line"><span class="comment"># 后续请求命中缓存，TTFT 大幅降低</span></span><br><span class="line">outputs = llm.generate(queries, sampling_params)</span><br></pre></td></tr></table></figure>
+<h3 id="C-OpenAI-兼容-API-Server"><a href="#C-OpenAI-兼容-API-Server" class="headerlink" title="C. OpenAI 兼容 API Server"></a>C. OpenAI 兼容 API Server</h3><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 启动服务</span></span><br><span class="line">python -m vllm.entrypoints.openai.api_server \</span><br><span class="line">    --model meta-llama/Llama-2-7b-hf \</span><br><span class="line">    --host 0.0.0.0 \</span><br><span class="line">    --port 8000 \</span><br><span class="line">    --enable-prefix-caching \</span><br><span class="line">    --max-num-batched-tokens 8192</span><br><span class="line"></span><br><span class="line"><span class="comment"># 调用</span></span><br><span class="line">curl http://localhost:8000/v1/chat/completions \</span><br><span class="line">    -H <span class="string">&quot;Content-Type: application/json&quot;</span> \</span><br><span class="line">    -d <span class="string">&#x27;&#123;</span></span><br><span class="line"><span class="string">        &quot;model&quot;: &quot;llama-2-7b&quot;,</span></span><br><span class="line"><span class="string">        &quot;messages&quot;: [&#123;&quot;role&quot;: &quot;user&quot;, &quot;content&quot;: &quot;Hello!&quot;&#125;],</span></span><br><span class="line"><span class="string">        &quot;max_tokens&quot;: 128</span></span><br><span class="line"><span class="string">    &#125;&#x27;</span></span><br></pre></td></tr></table></figure>
+<h3 id="D-观察-Prefix-Cache-命中率"><a href="#D-观察-Prefix-Cache-命中率" class="headerlink" title="D. 观察 Prefix Cache 命中率"></a>D. 观察 Prefix Cache 命中率</h3><figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 启用日志</span></span><br><span class="line"><span class="keyword">import</span> os</span><br><span class="line">os.environ[<span class="string">&quot;VLLM_LOGGING_LEVEL&quot;</span>] = <span class="string">&quot;INFO&quot;</span></span><br><span class="line"></span><br><span class="line">llm = LLM(</span><br><span class="line">    model=<span class="string">&quot;llama-7b&quot;</span>,</span><br><span class="line">    enable_prefix_caching=<span class="literal">True</span>,</span><br><span class="line">)</span><br><span class="line"></span><br><span class="line"><span class="comment"># 运行推理</span></span><br><span class="line">outputs = llm.generate(prompts, sampling_params)</span><br><span class="line"></span><br><span class="line"><span class="comment"># 从日志中查看：</span></span><br><span class="line"><span class="comment"># INFO 2026-07-06 [scheduler.py] Prefix cache hit rate: 78.5%</span></span><br></pre></td></tr></table></figure>
+<hr>
+<p><strong>下一篇预告</strong>：《vLLM 架构源码解析（二）：PagedAttention CUDA Kernel 深度剖析》</p>
+<hr>
+<p><em>文章字数：约 8000 字 | 预计阅读时间：25 分钟</em><br><em>源码版本：vLLM v0.6.x</em></p>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          
+
+<div class="post-copyright">
+<ul>
+  <li class="post-copyright-author">
+      <strong>Post author:  </strong>zzz
+  </li>
+  <li class="post-copyright-link">
+      <strong>Post link: </strong>
+      <a href="http://wazhb.com/2026/07/06/20260706-vllm-architecture-api-to-token-generation/" title="vLLM 架构源码解析（一）：从 API 请求到 Token 生成">http://wazhb.com/2026/07/06/20260706-vllm-architecture-api-to-token-generation/</a>
+  </li>
+  <li class="post-copyright-license">
+    <strong>Copyright Notice:  </strong>All articles in this blog are licensed under <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/deed.zh" rel="noopener" target="_blank"><i class="fab fa-fw fa-creative-commons"></i>BY-NC-SA</a> unless stating additionally.
+  </li>
+</ul>
+</div>
+
+          <div class="post-tags">
+              
+              <a href="/tags/vLLM/" rel="tag"><i class="fa fa-tag"></i> vLLM</a>
+              
+              <a href="/tags/LLM-Serving/" rel="tag"><i class="fa fa-tag"></i> LLM Serving</a>
+              
+              <a href="/tags/Inference/" rel="tag"><i class="fa fa-tag"></i> Inference</a>
+              
+              <a href="/tags/Scheduler/" rel="tag"><i class="fa fa-tag"></i> Scheduler</a>
+              
+              <a href="/tags/Engine/" rel="tag"><i class="fa fa-tag"></i> Engine</a>
+              
+              <a href="/tags/Token-Generation/" rel="tag"><i class="fa fa-tag"></i> Token Generation</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2026/06/10/20260610-write-agent-learning/" rel="prev" title="如何写一个 Agent：从最小 Runtime 到 Coding Agent">
+                  <i class="fa fa-chevron-left"></i> 如何写一个 Agent：从最小 Runtime 到 Coding Agent
+                </a>
+            </div>
+            <div class="post-nav-item">
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+<script src="/js/comments.js"></script>
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+
+<div class="copyright">
+  &copy; 2020 – 
+  <span itemprop="copyrightYear">2026</span>
+  <span class="with-love">
+    <i class="fa fa-heart"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">zzz</span>
+</div>
+<div class="busuanzi-count">
+    <span class="post-meta-item" id="busuanzi_container_site_uv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-user"></i>
+      </span>
+      <span class="site-uv" title="Total Visitors">
+        <span id="busuanzi_value_site_uv"></span>
+      </span>
+    </span>
+    <span class="post-meta-item" id="busuanzi_container_site_pv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-eye"></i>
+      </span>
+      <span class="site-pv" title="Total Views">
+        <span id="busuanzi_value_site_pv"></span>
+      </span>
+    </span>
+</div>
+
+
+    <script async src="//dn-lbstatics.qbox.me/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+
+    </div>
+  </footer>
+
+  
+  <script src="https://cdn.jsdelivr.net/npm/animejs@3.2.1/lib/anime.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jquery@3.6.0/dist/jquery.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@fancyapps/fancybox@3.5.7/dist/jquery.fancybox.min.js"></script>
+<script src="/js/utils.js"></script><script src="/js/motion.js"></script><script src="/js/next-boot.js"></script>
+
+  
+<script src="/js/third-party/search/local-search.js"></script>
+
+
+
+
+
+
+  
+  <script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+
+
+
+  
+
+  <script class="next-config" data-name="enableMath" type="application/json">true</script><script class="next-config" data-name="mathjax" type="application/json">{&quot;enable&quot;:true,&quot;tags&quot;:&quot;none&quot;,&quot;js&quot;:&quot;https:&#x2F;&#x2F;cdn.jsdelivr.net&#x2F;npm&#x2F;mathjax@3.1.2&#x2F;es5&#x2F;tex-mml-chtml.js&quot;}</script>
+<script src="/js/third-party/math/mathjax.js"></script>
+
+
+
+</body>
+</html>

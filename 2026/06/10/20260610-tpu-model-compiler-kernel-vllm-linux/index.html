@@ -1,0 +1,892 @@
+<!DOCTYPE html>
+<html lang="zh-Hans">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 5.4.2">
+
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+<link rel="stylesheet" href="https://fonts.loli.net/css?family=Noto+Serif+SC:300,300italic,400,400italic,700,700italic%7CRoboto+Slab:300,300italic,400,400italic,700,700italic%7CPT+Mono:300,300italic,400,400italic,700,700italic&display=swap&subset=latin,latin-ext">
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@5.15.3/css/all.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/animate.css@3.1.1/animate.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fancyapps/fancybox@3.5.7/dist/jquery.fancybox.min.css">
+
+<script class="next-config" data-name="main" type="application/json">{&quot;hostname&quot;:&quot;wazhb.com&quot;,&quot;root&quot;:&quot;&#x2F;&quot;,&quot;images&quot;:&quot;&#x2F;images&quot;,&quot;scheme&quot;:&quot;Gemini&quot;,&quot;version&quot;:&quot;8.3.0&quot;,&quot;exturl&quot;:false,&quot;sidebar&quot;:{&quot;position&quot;:&quot;left&quot;,&quot;display&quot;:&quot;always&quot;,&quot;padding&quot;:18,&quot;offset&quot;:12},&quot;copycode&quot;:false,&quot;bookmark&quot;:{&quot;enable&quot;:false,&quot;color&quot;:&quot;#222&quot;,&quot;save&quot;:&quot;auto&quot;},&quot;fancybox&quot;:true,&quot;mediumzoom&quot;:false,&quot;lazyload&quot;:false,&quot;pangu&quot;:false,&quot;comments&quot;:{&quot;style&quot;:&quot;tabs&quot;,&quot;active&quot;:null,&quot;storage&quot;:true,&quot;lazyload&quot;:false,&quot;nav&quot;:null},&quot;motion&quot;:{&quot;enable&quot;:true,&quot;async&quot;:false,&quot;transition&quot;:{&quot;post_block&quot;:&quot;fadeIn&quot;,&quot;post_header&quot;:&quot;fadeInDown&quot;,&quot;post_body&quot;:&quot;fadeInDown&quot;,&quot;coll_header&quot;:&quot;fadeInLeft&quot;,&quot;sidebar&quot;:&quot;fadeInUp&quot;}},&quot;prism&quot;:false,&quot;i18n&quot;:{&quot;placeholder&quot;:&quot;Searching...&quot;,&quot;empty&quot;:&quot;We didn&#39;t find any results for the search: ${query}&quot;,&quot;hits_time&quot;:&quot;${hits} results found in ${time} ms&quot;,&quot;hits&quot;:&quot;${hits} results found&quot;},&quot;path&quot;:&quot;&#x2F;search.xml&quot;,&quot;localsearch&quot;:{&quot;enable&quot;:true,&quot;trigger&quot;:&quot;auto&quot;,&quot;top_n_per_article&quot;:1,&quot;unescape&quot;:false,&quot;preload&quot;:false}}</script>
+<meta name="description" content="最近在梳理大模型基础设施的系统分层图：大模型、深度学习框架、Tensor、算子、算子内核、DLC&#x2F;编译器、vLLM、TPU Runtime、Linux 内核和 TPU 硬件分别处在哪一层，各自解决什么问题。 这篇文章试图用更工程化的方式回答这个问题。最核心的关系是：大模型定义计算目标，框架表达计算图，算子定义数学语义，算子内核定义硬件实现，编译器&#x2F;DLC 生成目标硬件可执行产物，vLLM 管理在线">
+<meta property="og:type" content="article">
+<meta property="og:title" content="从大模型到 TPU 执行：框架、算子、内核、DLC、vLLM 与 Linux 内核">
+<meta property="og:url" content="http://wazhb.com/2026/06/10/20260610-tpu-model-compiler-kernel-vllm-linux/index.html">
+<meta property="og:site_name" content="zzz の Blogs">
+<meta property="og:description" content="最近在梳理大模型基础设施的系统分层图：大模型、深度学习框架、Tensor、算子、算子内核、DLC&#x2F;编译器、vLLM、TPU Runtime、Linux 内核和 TPU 硬件分别处在哪一层，各自解决什么问题。 这篇文章试图用更工程化的方式回答这个问题。最核心的关系是：大模型定义计算目标，框架表达计算图，算子定义数学语义，算子内核定义硬件实现，编译器&#x2F;DLC 生成目标硬件可执行产物，vLLM 管理在线">
+<meta property="og:locale">
+<meta property="article:published_time" content="2026-06-09T16:00:00.000Z">
+<meta property="article:modified_time" content="2026-07-07T02:52:23.580Z">
+<meta property="article:author" content="zzz">
+<meta property="article:tag" content="TPU">
+<meta property="article:tag" content="LLM">
+<meta property="article:tag" content="vLLM">
+<meta property="article:tag" content="Compiler">
+<meta property="article:tag" content="Linux">
+<meta property="article:tag" content="Kernel">
+<meta name="twitter:card" content="summary">
+
+
+<link rel="canonical" href="http://wazhb.com/2026/06/10/20260610-tpu-model-compiler-kernel-vllm-linux/">
+
+
+
+<script class="next-config" data-name="page" type="application/json">{&quot;sidebar&quot;:&quot;&quot;,&quot;isHome&quot;:false,&quot;isPost&quot;:true,&quot;lang&quot;:&quot;zh-Hans&quot;,&quot;comments&quot;:true,&quot;permalink&quot;:&quot;http:&#x2F;&#x2F;wazhb.com&#x2F;2026&#x2F;06&#x2F;10&#x2F;20260610-tpu-model-compiler-kernel-vllm-linux&#x2F;&quot;,&quot;path&quot;:&quot;2026&#x2F;06&#x2F;10&#x2F;20260610-tpu-model-compiler-kernel-vllm-linux&#x2F;&quot;,&quot;title&quot;:&quot;从大模型到 TPU 执行：框架、算子、内核、DLC、vLLM 与 Linux 内核&quot;}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">&quot;&quot;</script>
+<title>从大模型到 TPU 执行：框架、算子、内核、DLC、vLLM 与 Linux 内核 | zzz の Blogs</title><script src="/js/config.js"></script>
+  
+
+
+
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+<link rel="alternate" href="/atom.xml" title="zzz の Blogs" type="application/atom+xml">
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="Toggle navigation bar" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <h1 class="site-title">zzz の Blogs</h1>
+      <i class="logo-line"></i>
+    </a>
+      <p class="site-subtitle" itemprop="description">尝试写博客の小白</p>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu">
+        <li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>Home</a></li>
+        <li class="menu-item menu-item-about"><a href="/about/" rel="section"><i class="fa fa-user fa-fw"></i>About</a></li>
+        <li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>Tags<span class="badge">20</span></a></li>
+        <li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>Categories<span class="badge">10</span></a></li>
+        <li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>Archives<span class="badge">11</span></a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>Search
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup"><div class="search-header">
+  <span class="search-icon">
+    <i class="fa fa-search"></i>
+  </span>
+  <div class="search-input-container">
+    <input autocomplete="off" autocapitalize="off" maxlength="80"
+           placeholder="Searching..." spellcheck="false"
+           type="search" class="search-input">
+  </div>
+  <span class="popup-btn-close" role="button">
+    <i class="fa fa-times-circle"></i>
+  </span>
+</div>
+<div class="search-result-container no-result">
+  <div class="search-result-icon">
+    <i class="fa fa-spinner fa-pulse fa-5x"></i>
+  </div>
+</div>
+
+    </div>
+  </div>
+
+</div>
+        
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          Table of Contents
+        </li>
+        <li class="sidebar-nav-overview">
+          Overview
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%85%88%E5%88%86%E6%B8%85%E4%B8%A4%E4%B8%AA-Kernel"><span class="nav-number">1.</span> <span class="nav-text">先分清两个 Kernel</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%95%B4%E4%BD%93%E5%88%86%E5%B1%82%E5%85%B3%E7%B3%BB"><span class="nav-number">2.</span> <span class="nav-text">整体分层关系</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E4%BB%8E%E6%A8%A1%E5%9E%8B%E5%88%B0%E8%AE%A1%E7%AE%97%E5%9B%BE"><span class="nav-number">3.</span> <span class="nav-text">从模型到计算图</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E5%A4%A7%E6%A8%A1%E5%9E%8B%EF%BC%9A%E9%AB%98%E5%B1%82%E5%87%BD%E6%95%B0%E4%B8%8E%E5%8F%82%E6%95%B0%E9%9B%86%E5%90%88"><span class="nav-number">3.1.</span> <span class="nav-text">大模型：高层函数与参数集合</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E6%A1%86%E6%9E%B6%EF%BC%9A%E6%A8%A1%E5%9E%8B%E8%A1%A8%E8%BE%BE%E3%80%81%E5%BC%A0%E9%87%8F%E7%AE%A1%E7%90%86%E4%B8%8E%E5%9B%BE%E5%AF%BC%E5%87%BA"><span class="nav-number">3.2.</span> <span class="nav-text">框架：模型表达、张量管理与图导出</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#Tensor%EF%BC%9A%E8%AE%A1%E7%AE%97%E5%9B%BE%E8%BE%B9%E4%B8%8A%E7%9A%84%E6%95%B0%E6%8D%AE%E5%AF%B9%E8%B1%A1"><span class="nav-number">3.3.</span> <span class="nav-text">Tensor：计算图边上的数据对象</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#Operator%EF%BC%9A%E8%AE%A1%E7%AE%97%E5%9B%BE%E8%8A%82%E7%82%B9%E4%B8%8A%E7%9A%84%E6%95%B0%E5%AD%A6%E8%AF%AD%E4%B9%89"><span class="nav-number">3.4.</span> <span class="nav-text">Operator：计算图节点上的数学语义</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#Operator-Kernel%EF%BC%9A%E7%9B%AE%E6%A0%87%E7%A1%AC%E4%BB%B6%E4%B8%8A%E7%9A%84%E6%89%A7%E8%A1%8C%E5%AE%9E%E7%8E%B0"><span class="nav-number">3.5.</span> <span class="nav-text">Operator Kernel：目标硬件上的执行实现</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#DLC-%E7%BC%96%E8%AF%91%E5%99%A8%EF%BC%9A%E4%BB%8E%E5%9B%BE%E8%AF%AD%E4%B9%89%E5%88%B0%E7%A1%AC%E4%BB%B6%E6%89%A7%E8%A1%8C%E8%AE%A1%E5%88%92"><span class="nav-number">4.</span> <span class="nav-text">DLC &#x2F; 编译器：从图语义到硬件执行计划</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#vLLM%EF%BC%9A%E5%9C%A8%E7%BA%BF%E6%8E%A8%E7%90%86%E6%9C%8D%E5%8A%A1%E5%BC%95%E6%93%8E%EF%BC%8C%E4%B8%8D%E6%98%AF%E7%A6%BB%E7%BA%BF%E7%BC%96%E8%AF%91%E5%99%A8"><span class="nav-number">5.</span> <span class="nav-text">vLLM：在线推理服务引擎，不是离线编译器</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#Prefill%E3%80%81Decode%E3%80%81KV-Cache-%E4%B8%8E-PagedAttention"><span class="nav-number">6.</span> <span class="nav-text">Prefill、Decode、KV Cache 与 PagedAttention</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#TPU-%E4%B8%8E-Linux-%E5%86%85%E6%A0%B8%E7%9A%84%E5%85%B3%E7%B3%BB"><span class="nav-number">7.</span> <span class="nav-text">TPU 与 Linux 内核的关系</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E4%BE%8B%E5%AD%90%E4%B8%80%EF%BC%9ALinear-Bias-ReLU-%E8%9E%8D%E5%90%88"><span class="nav-number">8.</span> <span class="nav-text">例子一：Linear + Bias + ReLU 融合</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E4%BE%8B%E5%AD%90%E4%BA%8C%EF%BC%9AScaled-Dot-Product-Attention"><span class="nav-number">9.</span> <span class="nav-text">例子二：Scaled Dot-Product Attention</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E4%BC%98%E5%8C%96%E5%88%B0%E5%BA%95%E5%9C%A8%E4%BC%98%E5%8C%96%E4%BB%80%E4%B9%88"><span class="nav-number">10.</span> <span class="nav-text">优化到底在优化什么</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%80%E5%90%8E%E6%80%BB%E7%BB%93"><span class="nav-number">11.</span> <span class="nav-text">最后总结</span></a></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author site-overview-item animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="zzz"
+      src="/images/yan.jpg">
+  <p class="site-author-name" itemprop="name">zzz</p>
+  <div class="site-description" itemprop="description">回首向来萧瑟处<br>归去，也无风雨也无晴。</div>
+</div>
+<div class="site-state-wrap site-overview-item animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">11</span>
+          <span class="site-state-item-name">posts</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">10</span>
+        <span class="site-state-item-name">categories</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">20</span>
+        <span class="site-state-item-name">tags</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author site-overview-item animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/mXIAoZ" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;mXIAoZ" rel="noopener" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:14751725611@163.com" title="E-Mail → mailto:14751725611@163.com" rel="noopener" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+  <div class="cc-license site-overview-item animated" itemprop="license">
+    <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/deed.zh" class="cc-opacity" rel="noopener" target="_blank"><img src="/images/cc-by-nc-sa.svg" alt="Creative Commons"></a>
+  </div>
+
+
+
+        </div>
+      </div>
+    </div>
+  </aside>
+  <div class="sidebar-dimmer"></div>
+
+
+    </header>
+
+    
+  <div class="back-to-top" role="button" aria-label="Back to top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+  <div class="reading-progress-bar"></div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-Hans">
+    <link itemprop="mainEntityOfPage" href="http://wazhb.com/2026/06/10/20260610-tpu-model-compiler-kernel-vllm-linux/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/yan.jpg">
+      <meta itemprop="name" content="zzz">
+      <meta itemprop="description" content="回首向来萧瑟处<br>归去，也无风雨也无晴。">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="zzz の Blogs">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          从大模型到 TPU 执行：框架、算子、内核、DLC、vLLM 与 Linux 内核
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">Posted on</span>
+
+      <time title="Created: 2026-06-10 00:00:00" itemprop="dateCreated datePublished" datetime="2026-06-10T00:00:00+08:00">2026-06-10</time>
+    </span>
+      <span class="post-meta-item">
+        <span class="post-meta-item-icon">
+          <i class="far fa-calendar-check"></i>
+        </span>
+        <span class="post-meta-item-text">Edited on</span>
+        <time title="Modified: 2026-07-07 10:52:23" itemprop="dateModified" datetime="2026-07-07T10:52:23+08:00">2026-07-07</time>
+      </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">In</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/AI-Infra/" itemprop="url" rel="index"><span itemprop="name">AI Infra</span></a>
+        </span>
+          , 
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/AI-Infra/TPU/" itemprop="url" rel="index"><span itemprop="name">TPU</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-item" title="Views" id="busuanzi_container_page_pv">
+      <span class="post-meta-item-icon">
+        <i class="far fa-eye"></i>
+      </span>
+      <span class="post-meta-item-text">Views: </span>
+      <span id="busuanzi_value_page_pv"></span>
+    </span>
+</div>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+        <p>最近在梳理大模型基础设施的系统分层图：大模型、深度学习框架、Tensor、算子、算子内核、DLC/编译器、vLLM、TPU Runtime、Linux 内核和 TPU 硬件分别处在哪一层，各自解决什么问题。</p>
+<p>这篇文章试图用更工程化的方式回答这个问题。最核心的关系是：<strong>大模型定义计算目标，框架表达计算图，算子定义数学语义，算子内核定义硬件实现，编译器/DLC 生成目标硬件可执行产物，vLLM 管理在线推理调度与 KV cache，Runtime 通过 Linux TPU 驱动把任务提交给 TPU 执行。</strong></p>
+<span id="more"></span>
+<h2 id="先分清两个-Kernel"><a href="#先分清两个-Kernel" class="headerlink" title="先分清两个 Kernel"></a>先分清两个 Kernel</h2><p>“Kernel” 在这条栈里至少有两个完全不同的含义。第一个是 <strong>Linux Kernel</strong>，也就是操作系统内核；第二个是 <strong>Operator Kernel</strong>，也就是某个算子在 GPU/TPU/NPU 上执行的计算内核。</p>
+<div class="table-container">
+<table>
+<thead>
+<tr>
+<th>名称</th>
+<th>专业含义</th>
+<th>运行位置</th>
+<th>主要职责</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Linux Kernel</td>
+<td>操作系统内核</td>
+<td>CPU 特权态</td>
+<td>进程调度、虚拟内存、文件系统、设备驱动、中断处理、权限隔离</td>
+</tr>
+<tr>
+<td>TPU Operator Kernel</td>
+<td>TPU 算子内核</td>
+<td>TPU/NPU/GPU 加速器</td>
+<td>执行 MatMul、Softmax、Attention、LayerNorm 等算子的具体硬件实现</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Linux Kernel 通常不理解 MatMul、Softmax、Attention 的数学语义；它负责让用户态程序安全、稳定地访问 TPU 设备。真正执行矩阵乘的是 TPU 上的 operator kernel。</p>
+<h2 id="整体分层关系"><a href="#整体分层关系" class="headerlink" title="整体分层关系"></a>整体分层关系</h2><p>下面这张图把推理/编译/执行链路放在一张分层图中。图中有两条容易混淆的路径：DLC/Compiler 偏离线编译，vLLM 偏在线推理服务调度。二者最终都需要通过后端 Runtime、Linux Driver 和硬件执行能力完成计算。</p>
+<div class="svg-figure">
+<svg viewBox="0 0 1180 940" width="100%" role="img" aria-label="LLM to TPU layered architecture">
+  <defs>
+    <marker id="arrow-main" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M1,1 L9,5 L1,9 Z" fill="#4b5563"/></marker>
+    <style>
+      .box{fill:#ffffff;stroke:#cbd5e1;stroke-width:2;rx:16;filter:drop-shadow(0 8px 12px rgba(15,23,42,.08));}
+      .blue{fill:#eff6ff;stroke:#93c5fd}.green{fill:#ecfdf5;stroke:#86efac}.amber{fill:#fffbeb;stroke:#fcd34d}.purple{fill:#f5f3ff;stroke:#c4b5fd}.gray{fill:#f8fafc;stroke:#cbd5e1}.cyan{fill:#ecfeff;stroke:#67e8f9}
+      .title{font:700 18px 'Times New Roman','SimSun',serif;fill:#111827}.sub{font:14px 'Times New Roman','SimSun',serif;fill:#4b5563}.arrow{stroke:#4b5563;stroke-width:2.2;fill:none;marker-end:url(#arrow-main)}
+    </style>
+  </defs>
+  <rect x="300" y="40" width="580" height="84" class="box blue"/><text x="590" y="74" text-anchor="middle" class="title">Large Language Model / 大语言模型</text><text x="590" y="100" text-anchor="middle" class="sub">Transformer Blocks, Weights, Tokenizer-facing Semantics</text>
+  <path d="M590 124 L590 160" class="arrow"/>
+  <rect x="300" y="160" width="580" height="84" class="box blue"/><text x="590" y="194" text-anchor="middle" class="title">Deep Learning Framework / 深度学习框架</text><text x="590" y="220" text-anchor="middle" class="sub">PyTorch, TensorFlow, JAX, Transformers</text>
+  <path d="M590 244 L590 280" class="arrow"/>
+  <rect x="300" y="280" width="580" height="84" class="box green"/><text x="590" y="314" text-anchor="middle" class="title">Computational Graph / 计算图</text><text x="590" y="340" text-anchor="middle" class="sub">Operators as Nodes, Tensors as Edges</text>
+  <path d="M590 364 C590 400 350 392 330 430" class="arrow"/>
+  <path d="M590 364 C590 400 830 392 850 430" class="arrow"/>
+  <rect x="90" y="430" width="480" height="92" class="box purple"/><text x="330" y="466" text-anchor="middle" class="title">Compiler / DLC Toolchain</text><text x="330" y="494" text-anchor="middle" class="sub">Graph Optimization, Lowering, Code Generation</text>
+  <rect x="610" y="430" width="480" height="92" class="box amber"/><text x="850" y="466" text-anchor="middle" class="title">vLLM Serving Engine</text><text x="850" y="494" text-anchor="middle" class="sub">Scheduler, Continuous Batching, PagedAttention, KV Cache</text>
+  <path d="M330 522 C330 570 560 560 590 600" class="arrow"/>
+  <path d="M850 522 C850 570 620 560 590 600" class="arrow"/>
+  <rect x="300" y="600" width="580" height="84" class="box gray"/><text x="590" y="634" text-anchor="middle" class="title">Runtime / SDK / 用户态运行时</text><text x="590" y="660" text-anchor="middle" class="sub">Load Artifacts, Allocate Buffers, Submit Command Buffers</text>
+  <path d="M590 684 L590 720" class="arrow"/>
+  <rect x="300" y="720" width="580" height="84" class="box gray"/><text x="590" y="754" text-anchor="middle" class="title">Linux Kernel + TPU Device Driver</text><text x="590" y="780" text-anchor="middle" class="sub">ioctl, mmap, DMA Mapping, Command Queue, Interrupts</text>
+  <path d="M590 804 L590 840" class="arrow"/>
+  <rect x="300" y="840" width="580" height="84" class="box cyan"/><text x="590" y="874" text-anchor="middle" class="title">TPU Hardware / TPU 硬件</text><text x="590" y="900" text-anchor="middle" class="sub">Global Memory, Local SRAM, DMA, Matrix Units, Vector Units</text>
+</svg>
+</div>
+
+<h2 id="从模型到计算图"><a href="#从模型到计算图" class="headerlink" title="从模型到计算图"></a>从模型到计算图</h2><h3 id="大模型：高层函数与参数集合"><a href="#大模型：高层函数与参数集合" class="headerlink" title="大模型：高层函数与参数集合"></a>大模型：高层函数与参数集合</h3><p>大模型可以看作一个由大量参数组成的函数。以 LLM 为例，模型通常由 Embedding、若干 Transformer Block、Normalization、MLP、Attention 和 LM Head 组成。大模型本身描述的是整体函数形式，而不是目标硬件上的具体执行策略。</p>
+<h3 id="框架：模型表达、张量管理与图导出"><a href="#框架：模型表达、张量管理与图导出" class="headerlink" title="框架：模型表达、张量管理与图导出"></a>框架：模型表达、张量管理与图导出</h3><p>深度学习框架负责描述模型结构、管理 Tensor、加载权重、执行自动微分、导出计算图，并调用后端 Runtime 或编译器。常见框架包括 PyTorch、TensorFlow、JAX、MindSpore 和 PaddlePaddle。</p>
+<p>模型代码通常是命令式或函数式写法；框架会把其中的张量运算记录成一张可分析、可优化的计算图。这张图不是图片，而是由节点和边组成的中间表示：节点通常是算子，边通常表示 Tensor 数据依赖。</p>
+<p>例如 PyTorch 代码：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">y = torch.softmax(x @ w, dim=-<span class="number">1</span>)</span><br></pre></td></tr></table></figure>
+<p>从图语义上看，这段代码至少包含输入 Tensor <code>x</code>、权重 Tensor <code>w</code>、矩阵乘 <code>MatMul</code>、以及 <code>Softmax</code>。它可以抽象成：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">x ─┐</span><br><span class="line">   ├─ MatMul ── Softmax ── y</span><br><span class="line">w ─┘</span><br></pre></td></tr></table></figure>
+<p>这就是计算图的核心作用：把“用户写的模型代码”转成“编译器和 Runtime 能理解的算子依赖关系”。框架层负责表达这个关系，但不一定决定它最终在 TPU 上如何分块、如何搬运数据、如何复用片上缓存。</p>
+<h3 id="Tensor：计算图边上的数据对象"><a href="#Tensor：计算图边上的数据对象" class="headerlink" title="Tensor：计算图边上的数据对象"></a>Tensor：计算图边上的数据对象</h3><p>Tensor 不只是多维数组，还包含一组影响编译和执行的重要元数据。</p>
+<div class="table-container">
+<table>
+<thead>
+<tr>
+<th>属性</th>
+<th>含义</th>
+<th>示例</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>shape</td>
+<td>维度大小</td>
+<td>$[B,S,H]$</td>
+</tr>
+<tr>
+<td>dtype</td>
+<td>元素类型</td>
+<td>FP32、FP16、BF16、INT8</td>
+</tr>
+<tr>
+<td>layout</td>
+<td>内存布局</td>
+<td>NCHW、NHWC、blocked layout</td>
+</tr>
+<tr>
+<td>stride</td>
+<td>各维度内存步长</td>
+<td>contiguous / non-contiguous</td>
+</tr>
+<tr>
+<td>device</td>
+<td>所在设备</td>
+<td>CPU、GPU、TPU、NPU</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>LLM 中常见 hidden states 可以表示为 <code>[B, S, H]</code>，例如 <code>[1, 2048, 4096]</code>：<code>B</code> 是 batch size，<code>S</code> 是 token 序列长度，<code>H</code> 是 hidden size。图像模型里常见的 <code>NCHW</code> / <code>NHWC</code> 则是在描述同一批图片数据的不同内存排列：<code>N</code> 是 batch，<code>C</code> 是 channel，<code>H</code> 是 height，<code>W</code> 是 width。</p>
+<p>在大多数 row-major 存储里，最后一个维度最连续。因此 <code>NCHW</code> 更容易连续扫同一个 channel 的宽度方向，<code>NHWC</code> 更容易连续读取同一个像素位置的多个 channel。算子的访问模式如果和 layout 对齐，DMA 搬运、cache locality、向量化和 kernel selection 都会更友好；如果不对齐，就可能需要 stride access 或额外 layout conversion。</p>
+<p>下面用一张纯文本图看同一张 <code>N=1, C=3, H=2, W=3</code> 图片在内存中的排列差异：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">NCHW = [N, C, H, W]</span><br><span class="line"></span><br><span class="line">内存顺序：先放完整 R 平面，再放完整 G 平面，再放完整 B 平面</span><br><span class="line"></span><br><span class="line">R channel: R00 R01 R02 R10 R11 R12</span><br><span class="line">G channel: G00 G01 G02 G10 G11 G12</span><br><span class="line">B channel: B00 B01 B02 B10 B11 B12</span><br><span class="line"></span><br><span class="line">连续方向：同一个 channel 内，H x W 空间位置连续</span><br><span class="line">适合访问：同一 channel 的空间窗口，例如卷积在 feature map 上滑动</span><br></pre></td></tr></table></figure>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line">NHWC = [N, H, W, C]</span><br><span class="line"></span><br><span class="line">内存顺序：每个像素位置的 R/G/B 连续放在一起</span><br><span class="line"></span><br><span class="line">pixel(0,0): R00 G00 B00</span><br><span class="line">pixel(0,1): R01 G01 B01</span><br><span class="line">pixel(0,2): R02 G02 B02</span><br><span class="line">pixel(1,0): R10 G10 B10</span><br><span class="line">...</span><br><span class="line"></span><br><span class="line">连续方向：同一个 pixel 的多个 channel 连续</span><br><span class="line">适合访问：同一空间位置的 channel 向量，例如按 channel 向量化读取</span><br></pre></td></tr></table></figure>
+<div class="table-container">
+<table>
+<thead>
+<tr>
+<th>Layout</th>
+<th>最连续的维度</th>
+<th>更友好的访问模式</th>
+<th>不匹配时的代价</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>NCHW</code></td>
+<td><code>W</code>，也就是同一 channel 内的宽度方向</td>
+<td>同一 channel 的空间窗口扫描</td>
+<td>读取同一 pixel 的多个 channel 可能是 stride access</td>
+</tr>
+<tr>
+<td><code>NHWC</code></td>
+<td><code>C</code>，也就是同一 pixel 的 channel 向量</td>
+<td>同一 pixel 的多个 channel 一次性读取</td>
+<td>扫同一 channel 的空间平面可能不连续</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>视觉上可以把它理解成下面这样：</p>
+<div class="svg-figure">
+<svg viewBox="0 0 1180 500" width="100%" role="img" aria-label="NCHW and NHWC memory layout visual comparison">
+  <defs>
+    <marker id="arrow-layout-visual" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M1,1 L9,5 L1,9 Z" fill="#475569"/></marker>
+    <style>.lvbox{fill:#fff;stroke:#cbd5e1;stroke-width:2;rx:14}.lvtitle{font:700 18px 'Times New Roman','SimSun',serif;fill:#111827}.lvtext{font:14px 'Times New Roman','SimSun',serif;fill:#475569}.lvsmall{font:12px 'Times New Roman','SimSun',serif;fill:#64748b}.lvred{fill:#fee2e2;stroke:#fca5a5}.lvgreen{fill:#dcfce7;stroke:#86efac}.lvblue{fill:#dbeafe;stroke:#93c5fd}.lvyellow{fill:#fef3c7;stroke:#fcd34d}.lvarrow{stroke:#475569;stroke-width:2.2;fill:none;marker-end:url(#arrow-layout-visual)}</style>
+  </defs>
+  <text x="590" y="42" text-anchor="middle" class="lvtitle">NCHW / NHWC 的连续方向不同</text>
+  <text x="590" y="68" text-anchor="middle" class="lvtext">NCHW 把 channel 平面分开存；NHWC 把同一个 pixel 的 channel 放在一起。</text>
+
+  <rect x="60" y="105" width="500" height="190" class="lvbox"/>
+  <text x="310" y="138" text-anchor="middle" class="lvtitle">NCHW = [N, C, H, W]</text>
+  <rect x="110" y="188" width="110" height="62" class="lvred"/><text x="165" y="214" text-anchor="middle" class="lvtext">R plane</text><text x="165" y="236" text-anchor="middle" class="lvsmall">H x W 连续</text>
+  <rect x="245" y="188" width="110" height="62" class="lvgreen"/><text x="300" y="214" text-anchor="middle" class="lvtext">G plane</text><text x="300" y="236" text-anchor="middle" class="lvsmall">H x W 连续</text>
+  <rect x="380" y="188" width="110" height="62" class="lvblue"/><text x="435" y="214" text-anchor="middle" class="lvtext">B plane</text><text x="435" y="236" text-anchor="middle" class="lvsmall">H x W 连续</text>
+  <path d="M220 219 L245 219" class="lvarrow"/><path d="M355 219 L380 219" class="lvarrow"/>
+
+  <rect x="620" y="105" width="500" height="190" class="lvbox"/>
+  <text x="870" y="138" text-anchor="middle" class="lvtitle">NHWC = [N, H, W, C]</text>
+  <g transform="translate(685 190)">
+    <rect x="0" y="0" width="42" height="46" class="lvred"/><text x="21" y="29" text-anchor="middle" class="lvsmall">R</text>
+    <rect x="42" y="0" width="42" height="46" class="lvgreen"/><text x="63" y="29" text-anchor="middle" class="lvsmall">G</text>
+    <rect x="84" y="0" width="42" height="46" class="lvblue"/><text x="105" y="29" text-anchor="middle" class="lvsmall">B</text>
+    <rect x="155" y="0" width="42" height="46" class="lvred"/><text x="176" y="29" text-anchor="middle" class="lvsmall">R</text>
+    <rect x="197" y="0" width="42" height="46" class="lvgreen"/><text x="218" y="29" text-anchor="middle" class="lvsmall">G</text>
+    <rect x="239" y="0" width="42" height="46" class="lvblue"/><text x="260" y="29" text-anchor="middle" class="lvsmall">B</text>
+    <rect x="310" y="0" width="42" height="46" class="lvred"/><text x="331" y="29" text-anchor="middle" class="lvsmall">R</text>
+    <rect x="352" y="0" width="42" height="46" class="lvgreen"/><text x="373" y="29" text-anchor="middle" class="lvsmall">G</text>
+    <rect x="394" y="0" width="42" height="46" class="lvblue"/><text x="415" y="29" text-anchor="middle" class="lvsmall">B</text>
+    <text x="63" y="70" text-anchor="middle" class="lvsmall">pixel 0</text><text x="218" y="70" text-anchor="middle" class="lvsmall">pixel 1</text><text x="373" y="70" text-anchor="middle" class="lvsmall">pixel 2</text>
+  </g>
+
+  <rect x="120" y="355" width="290" height="58" class="lvred"/><text x="265" y="380" text-anchor="middle" class="lvtext">NCHW</text><text x="265" y="400" text-anchor="middle" class="lvsmall">适合扫同一 channel 的空间窗口</text>
+  <rect x="445" y="355" width="290" height="58" class="lvblue"/><text x="590" y="380" text-anchor="middle" class="lvtext">NHWC</text><text x="590" y="400" text-anchor="middle" class="lvsmall">适合读同一 pixel 的 channel 向量</text>
+  <rect x="770" y="355" width="290" height="58" class="lvyellow"/><text x="915" y="380" text-anchor="middle" class="lvtext">Layout 不匹配</text><text x="915" y="400" text-anchor="middle" class="lvsmall">可能需要 stride access 或 transpose</text>
+</svg>
+</div>
+
+<h3 id="Operator：计算图节点上的数学语义"><a href="#Operator：计算图节点上的数学语义" class="headerlink" title="Operator：计算图节点上的数学语义"></a>Operator：计算图节点上的数学语义</h3><p>Operator 定义“算什么”。例如 Elementwise Add、Reduction Sum、MatMul、Softmax、RMSNorm、Attention 都是算子。以矩阵乘为例：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">C[i, j] = sum(k=1..K, A[i, k] * B[k, j])</span><br></pre></td></tr></table></figure>
+<p>如果 $A\in\mathbb{R}^{M\times K}$，$B\in\mathbb{R}^{K\times N}$，那么输出 $C\in\mathbb{R}^{M\times N}$。这个定义描述的是数学语义，不描述具体硬件上如何高效执行。</p>
+<h3 id="Operator-Kernel：目标硬件上的执行实现"><a href="#Operator-Kernel：目标硬件上的执行实现" class="headerlink" title="Operator Kernel：目标硬件上的执行实现"></a>Operator Kernel：目标硬件上的执行实现</h3><p>Operator Kernel 定义“怎么在硬件上算”。同一个 MatMul operator 可以对应 CPU kernel、CUDA kernel、Triton kernel、TPU kernel 或 NPU kernel。TPU MatMul kernel 通常会涉及 tile 划分、global memory 到 local SRAM 的搬运、DMA、matrix unit 调用、partial sum 累加和写回。</p>
+<div class="svg-figure">
+<svg viewBox="0 0 1120 430" width="100%" role="img" aria-label="operator kernel hardware mapping">
+  <defs>
+    <marker id="arrow-ok" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M1,1 L9,5 L1,9 Z" fill="#475569"/></marker>
+    <style>.okbox{fill:#fff;stroke:#cbd5e1;stroke-width:2;rx:16}.okblue{fill:#eff6ff;stroke:#93c5fd}.okamber{fill:#fffbeb;stroke:#fcd34d}.okgreen{fill:#ecfdf5;stroke:#86efac}.okt{font:700 17px 'Times New Roman','SimSun',serif;fill:#111827}.oks{font:14px 'Times New Roman','SimSun',serif;fill:#475569}.oka{stroke:#475569;stroke-width:2.2;fill:none;marker-end:url(#arrow-ok)}</style>
+  </defs>
+  <rect x="60" y="90" width="280" height="160" class="okbox okblue"/><text x="200" y="130" text-anchor="middle" class="okt">Operator / 算子</text><text x="200" y="166" text-anchor="middle" class="oks">数学语义</text><text x="200" y="196" text-anchor="middle" class="oks">Cᵢⱼ = Σₖ AᵢₖBₖⱼ</text>
+  <rect x="420" y="90" width="280" height="160" class="okbox okamber"/><text x="560" y="130" text-anchor="middle" class="okt">Operator Kernel / 算子内核</text><text x="560" y="166" text-anchor="middle" class="oks">tiling, scheduling</text><text x="560" y="196" text-anchor="middle" class="oks">load → compute → store</text>
+  <rect x="780" y="90" width="280" height="160" class="okbox okgreen"/><text x="920" y="130" text-anchor="middle" class="okt">Hardware / TPU 硬件</text><text x="920" y="166" text-anchor="middle" class="oks">SRAM, DMA</text><text x="920" y="196" text-anchor="middle" class="oks">matrix units, vector units</text>
+  <path d="M340 170 L420 170" class="oka"/><path d="M700 170 L780 170" class="oka"/>
+  <text x="380" y="150" text-anchor="middle" class="oks">lowering</text><text x="740" y="150" text-anchor="middle" class="oks">execute</text>
+</svg>
+</div>
+
+<h2 id="DLC-编译器：从图语义到硬件执行计划"><a href="#DLC-编译器：从图语义到硬件执行计划" class="headerlink" title="DLC / 编译器：从图语义到硬件执行计划"></a>DLC / 编译器：从图语义到硬件执行计划</h2><p>DLC 在不同厂商语境下可能表示 <strong>Deep Learning Compiler</strong>，也可能表示 <strong>Compiled Model Artifact</strong>。这两种含义都围绕同一件事：把高层模型图转换为目标硬件上可执行、正确且高效的执行计划。</p>
+<div class="table-container">
+<table>
+<thead>
+<tr>
+<th>生态</th>
+<th>常见编译产物</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>NVIDIA TensorRT</td>
+<td>engine / plan</td>
+</tr>
+<tr>
+<td>Qualcomm SNPE</td>
+<td>dlc</td>
+</tr>
+<tr>
+<td>Ascend</td>
+<td>om</td>
+</tr>
+<tr>
+<td>Sophon</td>
+<td>bmodel</td>
+</tr>
+<tr>
+<td>其他 TPU/NPU 厂商</td>
+<td>model binary / compiled artifact</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>典型编译链路如下：</p>
+<div class="svg-figure">
+<svg viewBox="0 0 1260 460" width="100%" role="img" aria-label="deep learning compiler pipeline">
+  <defs>
+    <marker id="arrow-compile" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M1,1 L9,5 L1,9 Z" fill="#2563eb"/></marker>
+    <style>.cbox{fill:#fff;stroke:#cbd5e1;stroke-width:2;rx:14}.c1{fill:#eff6ff;stroke:#93c5fd}.c2{fill:#ecfdf5;stroke:#86efac}.c3{fill:#fffbeb;stroke:#fcd34d}.ct{font:700 15px 'Times New Roman','SimSun',serif;fill:#111827}.cs{font:13px 'Times New Roman','SimSun',serif;fill:#475569}.ca{stroke:#2563eb;stroke-width:2.2;fill:none;marker-end:url(#arrow-compile)}</style>
+  </defs>
+  <rect x="40" y="70" width="170" height="86" class="cbox c1"/><text x="125" y="104" text-anchor="middle" class="ct">Model Export</text><text x="125" y="130" text-anchor="middle" class="cs">PyTorch / ONNX</text>
+  <rect x="260" y="70" width="170" height="86" class="cbox c1"/><text x="345" y="104" text-anchor="middle" class="ct">Graph IR</text><text x="345" y="130" text-anchor="middle" class="cs">operators + tensors</text>
+  <rect x="480" y="70" width="180" height="86" class="cbox c2"/><text x="570" y="104" text-anchor="middle" class="ct">Graph Optimize</text><text x="570" y="130" text-anchor="middle" class="cs">fusion, folding</text>
+  <rect x="710" y="70" width="180" height="86" class="cbox c2"/><text x="800" y="104" text-anchor="middle" class="ct">Lowering</text><text x="800" y="130" text-anchor="middle" class="cs">Graph IR → Tensor IR</text>
+  <rect x="940" y="70" width="180" height="86" class="cbox c3"/><text x="1030" y="104" text-anchor="middle" class="ct">Scheduling</text><text x="1030" y="130" text-anchor="middle" class="cs">tiling, layout</text>
+  <path d="M210 113 L260 113" class="ca"/><path d="M430 113 L480 113" class="ca"/><path d="M660 113 L710 113" class="ca"/><path d="M890 113 L940 113" class="ca"/>
+  <rect x="260" y="260" width="180" height="86" class="cbox c3"/><text x="350" y="294" text-anchor="middle" class="ct">Memory Planning</text><text x="350" y="320" text-anchor="middle" class="cs">buffers, reuse</text>
+  <rect x="530" y="260" width="180" height="86" class="cbox c3"/><text x="620" y="294" text-anchor="middle" class="ct">Code Generation</text><text x="620" y="320" text-anchor="middle" class="cs">kernel binary</text>
+  <rect x="800" y="260" width="180" height="86" class="cbox c1"/><text x="890" y="294" text-anchor="middle" class="ct">Compiled Artifact</text><text x="890" y="320" text-anchor="middle" class="cs">DLC / model binary</text>
+  <rect x="1070" y="260" width="150" height="86" class="cbox c2"/><text x="1145" y="294" text-anchor="middle" class="ct">Runtime</text><text x="1145" y="320" text-anchor="middle" class="cs">load + execute</text>
+  <path d="M1030 156 C1030 210 350 205 350 260" class="ca"/><path d="M440 303 L530 303" class="ca"/><path d="M710 303 L800 303" class="ca"/><path d="M980 303 L1070 303" class="ca"/>
+</svg>
+</div>
+
+<p>其中，Graph IR 保留较高层的算子语义；Tensor IR 更接近循环、索引和 buffer；Kernel IR 更接近目标硬件执行方式。编译器的核心任务不是“把 Python 翻译成二进制”这么简单，而是同时决定算子融合、layout、tiling、memory planning、kernel selection 和 code generation。</p>
+<h2 id="vLLM：在线推理服务引擎，不是离线编译器"><a href="#vLLM：在线推理服务引擎，不是离线编译器" class="headerlink" title="vLLM：在线推理服务引擎，不是离线编译器"></a>vLLM：在线推理服务引擎，不是离线编译器</h2><p>vLLM 的定位是 <strong>LLM inference serving engine</strong>。它关注在线推理系统问题：如何接收多用户请求，如何调度 prefill 和 decode，如何做 continuous batching，如何管理 KV cache，如何通过后端 Runtime 调用硬件 kernel。</p>
+<div class="svg-figure">
+<svg viewBox="0 0 1120 620" width="100%" role="img" aria-label="vLLM serving stack">
+  <defs>
+    <marker id="arrow-vllm" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M1,1 L9,5 L1,9 Z" fill="#15803d"/></marker>
+    <style>.vbox{fill:#fff;stroke:#cbd5e1;stroke-width:2;rx:14}.v1{fill:#eff6ff;stroke:#93c5fd}.v2{fill:#ecfdf5;stroke:#86efac}.v3{fill:#fffbeb;stroke:#fcd34d}.v4{fill:#f5f3ff;stroke:#c4b5fd}.vt{font:700 16px 'Times New Roman','SimSun',serif;fill:#111827}.vs{font:13px 'Times New Roman','SimSun',serif;fill:#475569}.va{stroke:#15803d;stroke-width:2.2;fill:none;marker-end:url(#arrow-vllm)}</style>
+  </defs>
+  <rect x="60" y="60" width="250" height="78" class="vbox v1"/><text x="185" y="92" text-anchor="middle" class="vt">Client Requests</text><text x="185" y="116" text-anchor="middle" class="vs">OpenAI API / Python API</text>
+  <rect x="435" y="60" width="250" height="78" class="vbox v1"/><text x="560" y="92" text-anchor="middle" class="vt">Tokenizer</text><text x="560" y="116" text-anchor="middle" class="vs">text ↔ token ids</text>
+  <rect x="810" y="60" width="250" height="78" class="vbox v2"/><text x="935" y="92" text-anchor="middle" class="vt">Request Scheduler</text><text x="935" y="116" text-anchor="middle" class="vs">admission and priority</text>
+  <path d="M310 99 L435 99" class="va"/><path d="M685 99 L810 99" class="va"/>
+  <rect x="160" y="240" width="280" height="92" class="vbox v2"/><text x="300" y="276" text-anchor="middle" class="vt">Continuous Batching</text><text x="300" y="304" text-anchor="middle" class="vs">merge prefill and decode workloads</text>
+  <rect x="680" y="240" width="280" height="92" class="vbox v3"/><text x="820" y="276" text-anchor="middle" class="vt">PagedAttention</text><text x="820" y="304" text-anchor="middle" class="vs">block table maps tokens to KV blocks</text>
+  <path d="M935 138 C935 195 820 190 820 240" class="va"/><path d="M900 138 C900 200 300 190 300 240" class="va"/><path d="M440 286 L680 286" class="va"/>
+  <rect x="110" y="460" width="260" height="86" class="vbox v4"/><text x="240" y="494" text-anchor="middle" class="vt">Model Executor</text><text x="240" y="520" text-anchor="middle" class="vs">prefill, decode, sampling</text>
+  <rect x="430" y="460" width="260" height="86" class="vbox"/><text x="560" y="494" text-anchor="middle" class="vt">Backend Runtime</text><text x="560" y="520" text-anchor="middle" class="vs">PyTorch / XLA / vendor SDK</text>
+  <rect x="750" y="460" width="260" height="86" class="vbox v2"/><text x="880" y="494" text-anchor="middle" class="vt">GPU / TPU / NPU</text><text x="880" y="520" text-anchor="middle" class="vs">operator kernels execute</text>
+  <path d="M300 332 L240 460" class="va"/><path d="M820 332 C820 410 260 400 240 460" class="va"/><path d="M370 503 L430 503" class="va"/><path d="M690 503 L750 503" class="va"/>
+</svg>
+</div>
+
+<p>vLLM 与 DLC/Compiler 的边界可以这样理解：vLLM 管在线请求与 KV cache，编译器管图优化与 kernel 生成，Linux driver 管设备访问，TPU hardware 管实际计算。若要让 vLLM 使用 TPU/NPU，需要 XLA/torch_xla、厂商 runtime adapter 或专门的 backend 支持。</p>
+<h2 id="Prefill、Decode、KV-Cache-与-PagedAttention"><a href="#Prefill、Decode、KV-Cache-与-PagedAttention" class="headerlink" title="Prefill、Decode、KV Cache 与 PagedAttention"></a>Prefill、Decode、KV Cache 与 PagedAttention</h2><p>LLM 推理通常分成两个阶段：Prefill 和 Decode。Prefill 处理完整 prompt，计算量大但序列维度并行度高；Decode 每次生成一个 token，单步计算较小，但需要反复读取历史 KV cache。</p>
+<p>KV cache 的近似内存占用可以写成：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">KV_bytes = 2 × L × B × S × H_kv × D_head × bytes(dtype)</span><br></pre></td></tr></table></figure>
+<p>其中 <code>2</code> 表示 K 和 V，<code>L</code> 是层数，<code>B</code> 是 batch size，<code>S</code> 是序列长度，<code>H_kv</code> 是 KV head 数，<code>D_head</code> 是每个 head 的维度。</p>
+<div class="svg-figure">
+<svg viewBox="0 0 1120 520" width="100%" role="img" aria-label="prefill decode pagedattention kv cache">
+  <defs>
+    <marker id="arrow-kv" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M1,1 L9,5 L1,9 Z" fill="#15803d"/></marker>
+    <style>.kbox{fill:#fff;stroke:#cbd5e1;stroke-width:2;rx:14}.k1{fill:#eff6ff;stroke:#93c5fd}.k2{fill:#ecfdf5;stroke:#86efac}.k3{fill:#fffbeb;stroke:#fcd34d}.kt{font:700 16px 'Times New Roman','SimSun',serif;fill:#111827}.ks{font:13px 'Times New Roman','SimSun',serif;fill:#475569}.ka{stroke:#15803d;stroke-width:2.2;fill:none;marker-end:url(#arrow-kv)}</style>
+  </defs>
+  <rect x="70" y="60" width="220" height="80" class="kbox k1"/><text x="180" y="92" text-anchor="middle" class="kt">Prompt Tokens</text><text x="180" y="116" text-anchor="middle" class="ks">input sequence</text>
+  <rect x="390" y="60" width="220" height="80" class="kbox k2"/><text x="500" y="92" text-anchor="middle" class="kt">Prefill</text><text x="500" y="116" text-anchor="middle" class="ks">build KV cache</text>
+  <rect x="710" y="60" width="220" height="80" class="kbox k3"/><text x="820" y="92" text-anchor="middle" class="kt">Decode</text><text x="820" y="116" text-anchor="middle" class="ks">read cache, append KV</text>
+  <path d="M290 100 L390 100" class="ka"/><path d="M610 100 L710 100" class="ka"/>
+  <rect x="70" y="230" width="980" height="235" class="kbox"/><text x="560" y="264" text-anchor="middle" class="kt">PagedAttention: 用 block table 管理 KV cache</text>
+  <text x="235" y="302" text-anchor="middle" class="ks">逻辑 token 顺序：模型看到 token 是连续的</text>
+  <rect x="115" y="325" width="90" height="42" class="kbox k1"/><text x="160" y="351" text-anchor="middle" class="ks">tok 0-15</text>
+  <rect x="215" y="325" width="90" height="42" class="kbox k1"/><text x="260" y="351" text-anchor="middle" class="ks">tok 16-31</text>
+  <rect x="315" y="325" width="90" height="42" class="kbox k1"/><text x="360" y="351" text-anchor="middle" class="ks">tok 32-47</text>
+  <text x="535" y="302" text-anchor="middle" class="ks">block table：记录逻辑块到物理块的映射</text>
+  <rect x="475" y="325" width="120" height="42" class="kbox k2"/><text x="535" y="351" text-anchor="middle" class="ks">0→17  1→04</text>
+  <rect x="475" y="378" width="120" height="42" class="kbox k2"/><text x="535" y="404" text-anchor="middle" class="ks">2→29</text>
+  <text x="835" y="302" text-anchor="middle" class="ks">物理 KV blocks：真实内存里可分散、可复用</text>
+  <rect x="720" y="325" width="90" height="42" class="kbox k3"/><text x="765" y="351" text-anchor="middle" class="ks">KV #17</text>
+  <rect x="835" y="325" width="90" height="42" class="kbox k3"/><text x="880" y="351" text-anchor="middle" class="ks">KV #04</text>
+  <rect x="950" y="325" width="90" height="42" class="kbox k3"/><text x="995" y="351" text-anchor="middle" class="ks">KV #29</text>
+  <path d="M405 346 L475 346" class="ka"/><path d="M595 346 L720 346" class="ka"/><path d="M595 346 L835 346" class="ka"/><path d="M595 399 L950 346" class="ka"/>
+  <text x="560" y="446" text-anchor="middle" class="ks">好处：不要求 KV cache 连续分配，请求结束后释放物理块，其他请求可以复用。</text>
+</svg>
+</div>
+
+<p>PagedAttention 的核心思想类似虚拟内存分页：请求里的 token 逻辑上是连续的，但它们对应的 KV cache 不必放在一整块连续内存里。vLLM 会把 token 序列切成固定大小的逻辑块，再通过 block table 映射到真实设备内存中的 physical KV blocks。这样可以降低 KV cache 碎片；一个请求结束后，它占用的物理 KV blocks 可以被释放并复用给其他请求，从而提高长上下文和多请求并发时的设备内存利用率。</p>
+<h2 id="TPU-与-Linux-内核的关系"><a href="#TPU-与-Linux-内核的关系" class="headerlink" title="TPU 与 Linux 内核的关系"></a>TPU 与 Linux 内核的关系</h2><p>TPU 是加速器硬件，Linux Kernel 是操作系统内核。用户态 Runtime 通常通过 <code>ioctl</code>、<code>mmap</code>、<code>poll</code> 等接口与 TPU device driver 通信；驱动再负责 DMA 映射、command queue、interrupt handling 和错误状态返回。</p>
+<div class="svg-figure">
+<svg viewBox="0 0 1180 620" width="100%" role="img" aria-label="linux kernel tpu driver architecture">
+  <defs>
+    <marker id="arrow-linux" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M1,1 L9,5 L1,9 Z" fill="#b91c1c"/></marker>
+    <style>.lbox{fill:#fff;stroke:#cbd5e1;stroke-width:2;rx:14}.l1{fill:#eff6ff;stroke:#93c5fd}.l2{fill:#fffbeb;stroke:#fcd34d}.l3{fill:#ecfdf5;stroke:#86efac}.lt{font:700 16px 'Times New Roman','SimSun',serif;fill:#111827}.ls{font:13px 'Times New Roman','SimSun',serif;fill:#475569}.la{stroke:#b91c1c;stroke-width:2.2;fill:none;marker-end:url(#arrow-linux)}</style>
+  </defs>
+  <rect x="40" y="40" width="1100" height="130" class="lbox l1"/><text x="80" y="75" class="lt">User Space / 用户态</text>
+  <rect x="170" y="90" width="220" height="58" class="lbox"/><text x="280" y="125" text-anchor="middle" class="lt">Application</text>
+  <rect x="520" y="90" width="220" height="58" class="lbox"/><text x="630" y="125" text-anchor="middle" class="lt">TPU Runtime / SDK</text>
+  <rect x="860" y="90" width="220" height="58" class="lbox"/><text x="970" y="125" text-anchor="middle" class="lt">DLC / Model Binary</text>
+  <path d="M390 119 L520 119" class="la"/><path d="M860 119 L740 119" class="la"/>
+  <rect x="40" y="245" width="1100" height="150" class="lbox l2"/><text x="80" y="280" class="lt">Kernel Space / Linux 内核态</text>
+  <rect x="160" y="310" width="220" height="58" class="lbox"/><text x="270" y="345" text-anchor="middle" class="lt">ioctl / mmap / poll</text>
+  <rect x="480" y="310" width="240" height="58" class="lbox"/><text x="600" y="345" text-anchor="middle" class="lt">TPU Device Driver</text>
+  <rect x="820" y="310" width="220" height="58" class="lbox"/><text x="930" y="345" text-anchor="middle" class="lt">DMA / IOMMU</text>
+  <path d="M630 148 L630 310" class="la"/><path d="M380 339 L480 339" class="la"/><path d="M720 339 L820 339" class="la"/>
+  <rect x="40" y="470" width="1100" height="110" class="lbox l3"/><text x="80" y="505" class="lt">Device / TPU 硬件</text>
+  <rect x="220" y="525" width="190" height="40" class="lbox"/><text x="315" y="551" text-anchor="middle" class="ls">Command Queue</text>
+  <rect x="500" y="525" width="190" height="40" class="lbox"/><text x="595" y="551" text-anchor="middle" class="ls">TPU Cores</text>
+  <rect x="780" y="525" width="190" height="40" class="lbox"/><text x="875" y="551" text-anchor="middle" class="ls">Interrupt</text>
+  <path d="M930 368 L930 525" class="la"/><path d="M410 545 L500 545" class="la"/><path d="M690 545 L780 545" class="la"/><path d="M875 525 C1060 450 1030 350 1040 339" class="la"/>
+</svg>
+</div>
+
+<p>因此，一个 MatMul 从 Python 到 TPU 的路径可以用专业语言概括为：框架识别 <code>aten::matmul</code> 或等价图节点，导出到 ONNX 或厂商 IR，编译器执行 lowering 和 kernel selection，Runtime 加载 compiled artifact 并提交 command buffer，Linux TPU driver 完成设备通信，TPU hardware 执行目标 MatMul kernel。</p>
+<h2 id="例子一：Linear-Bias-ReLU-融合"><a href="#例子一：Linear-Bias-ReLU-融合" class="headerlink" title="例子一：Linear + Bias + ReLU 融合"></a>例子一：Linear + Bias + ReLU 融合</h2><p>框架层表达式如下：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">y = torch.relu(x @ w + b)</span><br></pre></td></tr></table></figure>
+<p>数学形式是：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">Y = max(0, XW + b)</span><br></pre></td></tr></table></figure>
+<p>如果不融合，执行路径包含 MatMul、Add、ReLU 三个算子，可能产生两个中间张量；如果融合，编译器可以生成一个 <code>Fused MatMul + Bias + ReLU Kernel</code>，在累加完成后直接加 bias、应用激活函数并写回最终输出。</p>
+<div class="svg-figure">
+<svg viewBox="0 0 1120 460" width="100%" role="img" aria-label="linear bias relu fusion">
+  <defs>
+    <marker id="arrow-fuse" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M1,1 L9,5 L1,9 Z" fill="#2563eb"/></marker>
+    <style>.fbox{fill:#fff;stroke:#cbd5e1;stroke-width:2;rx:14}.f1{fill:#eff6ff;stroke:#93c5fd}.f2{fill:#ecfdf5;stroke:#86efac}.ft{font:700 16px 'Times New Roman','SimSun',serif;fill:#111827}.fs{font:13px 'Times New Roman','SimSun',serif;fill:#475569}.fa{stroke:#2563eb;stroke-width:2.2;fill:none;marker-end:url(#arrow-fuse)}</style>
+  </defs>
+  <text x="60" y="50" class="ft">Before Fusion / 融合前</text>
+  <rect x="70" y="90" width="150" height="68" class="fbox f1"/><text x="145" y="130" text-anchor="middle" class="ft">MatMul</text>
+  <rect x="310" y="90" width="150" height="68" class="fbox f1"/><text x="385" y="130" text-anchor="middle" class="ft">Add</text>
+  <rect x="550" y="90" width="150" height="68" class="fbox f1"/><text x="625" y="130" text-anchor="middle" class="ft">ReLU</text>
+  <rect x="790" y="90" width="150" height="68" class="fbox"/><text x="865" y="130" text-anchor="middle" class="ft">Output</text>
+  <path d="M220 124 L310 124" class="fa"/><path d="M460 124 L550 124" class="fa"/><path d="M700 124 L790 124" class="fa"/>
+  <text x="265" y="178" text-anchor="middle" class="fs">tmp1</text><text x="505" y="178" text-anchor="middle" class="fs">tmp2</text>
+  <text x="60" y="280" class="ft">After Fusion / 融合后</text>
+  <rect x="120" y="320" width="460" height="78" class="fbox f2"/><text x="350" y="352" text-anchor="middle" class="ft">Fused MatMul + Bias + ReLU Kernel</text><text x="350" y="378" text-anchor="middle" class="fs">accumulate → add bias → activation → store once</text>
+  <rect x="760" y="325" width="160" height="68" class="fbox"/><text x="840" y="365" text-anchor="middle" class="ft">Output</text>
+  <path d="M580 359 L760 359" class="fa"/>
+</svg>
+</div>
+
+<p>融合的直接收益是减少中间 tensor、减少 global memory 读写、减少 kernel launch overhead，并提升端到端吞吐。</p>
+<h2 id="例子二：Scaled-Dot-Product-Attention"><a href="#例子二：Scaled-Dot-Product-Attention" class="headerlink" title="例子二：Scaled Dot-Product Attention"></a>例子二：Scaled Dot-Product Attention</h2><p>Scaled Dot-Product Attention 的经典公式来自 Transformer 论文 <em>Attention Is All You Need</em> 的 3.2.1 节：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">Attention(Q, K, V) = softmax((QK^T) / sqrt(d_k)) V</span><br></pre></td></tr></table></figure>
+<p>其中 <code>d_k</code> 是 key/query 向量维度，除以 <code>sqrt(d_k)</code> 是为了避免点积值随维度增大而过大，导致 softmax 进入梯度很小的区域。在 LLM 的 causal self-attention 中，softmax 前通常还会加入 causal mask，阻止当前位置看到未来 token。</p>
+<p>这里最容易抽象的是 <code>scores</code> 为什么会变成 <code>[B, H, S, S]</code>。先看 Q、K、V 的常见 shape：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">Q: [B, H, S, D]</span><br><span class="line">K: [B, H, S, D]</span><br><span class="line">V: [B, H, S, D]</span><br></pre></td></tr></table></figure>
+<p>其中 <code>B</code> 是 batch size，<code>H</code> 是 attention head 数，<code>S</code> 是序列长度，<code>D</code> 是每个 head 的维度。对每个 batch、每个 head 来说，注意力会让“每个 query token”去和“每个 key token”算相似度：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">Q[b,h]      : [S_query, D]</span><br><span class="line">K[b,h]^T    : [D, S_key]</span><br><span class="line">Q[b,h]K[b,h]^T -&gt; [S_query, S_key]</span><br></pre></td></tr></table></figure>
+<p>自注意力里 <code>S_query = S_key = S</code>，所以每个 head 会得到一个 <code>[S, S]</code> 的 scores 矩阵；再乘上 batch 和 head 两个维度，整体就是 <code>[B, H, S, S]</code>。这两个 <code>S</code> 不是重复写错了：前一个 <code>S</code> 表示 query token 位置，后一个 <code>S</code> 表示 key token 位置。</p>
+<p>普通实现可能 materialize <code>scores</code> 和 <code>probs</code> 两个 <code>[B, H, S, S]</code> 规模的中间矩阵。当序列长度 <code>S</code> 很大时，内存读写会成为主要瓶颈。</p>
+<div class="svg-figure">
+<svg viewBox="0 0 1180 520" width="100%" role="img" aria-label="scaled dot product attention">
+  <defs>
+    <marker id="arrow-attn" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M1,1 L9,5 L1,9 Z" fill="#7c3aed"/></marker>
+    <style>.abox{fill:#fff;stroke:#cbd5e1;stroke-width:2;rx:14}.a1{fill:#eff6ff;stroke:#93c5fd}.a2{fill:#fffbeb;stroke:#fcd34d}.a3{fill:#ecfdf5;stroke:#86efac}.at{font:700 16px 'Times New Roman','SimSun',serif;fill:#111827}.as{font:13px 'Times New Roman','SimSun',serif;fill:#475569}.aa{stroke:#7c3aed;stroke-width:2.2;fill:none;marker-end:url(#arrow-attn)}</style>
+  </defs>
+  <rect x="60" y="70" width="150" height="60" class="abox a1"/><text x="135" y="100" text-anchor="middle" class="at">Q</text><text x="135" y="121" text-anchor="middle" class="as">[B,H,S,D]</text>
+  <rect x="60" y="210" width="150" height="60" class="abox a1"/><text x="135" y="240" text-anchor="middle" class="at">K</text><text x="135" y="261" text-anchor="middle" class="as">[B,H,S,D]</text>
+  <rect x="60" y="350" width="150" height="60" class="abox a1"/><text x="135" y="380" text-anchor="middle" class="at">V</text><text x="135" y="401" text-anchor="middle" class="as">[B,H,S,D]</text>
+  <rect x="300" y="145" width="190" height="76" class="abox a2"/><text x="395" y="176" text-anchor="middle" class="at">QKᵀ scores</text><text x="395" y="202" text-anchor="middle" class="as">[B,H,S_query,S_key]</text>
+  <rect x="560" y="145" width="170" height="76" class="abox a2"/><text x="645" y="178" text-anchor="middle" class="at">Scale</text><text x="645" y="202" text-anchor="middle" class="as">1 / sqrt(dₖ)</text>
+  <rect x="820" y="145" width="170" height="76" class="abox a3"/><text x="905" y="178" text-anchor="middle" class="at">Softmax</text><text x="905" y="202" text-anchor="middle" class="as">probabilities</text>
+  <rect x="560" y="340" width="170" height="76" class="abox a2"/><text x="645" y="373" text-anchor="middle" class="at">MatMul V</text><text x="645" y="397" text-anchor="middle" class="as">weighted sum</text>
+  <rect x="820" y="340" width="170" height="76" class="abox"/><text x="905" y="373" text-anchor="middle" class="at">Output O</text><text x="905" y="397" text-anchor="middle" class="as">[B,H,S,D]</text>
+  <path d="M190 100 C245 100 250 183 300 183" class="aa"/><path d="M190 240 C245 240 250 183 300 183" class="aa"/><path d="M470 183 L560 183" class="aa"/><path d="M730 183 L820 183" class="aa"/><path d="M905 221 C905 300 730 300 730 378" class="aa"/><path d="M190 380 L560 380" class="aa"/><path d="M730 378 L820 378" class="aa"/>
+  <rect x="1010" y="165" width="130" height="190" class="abox"/><text x="1075" y="200" text-anchor="middle" class="at">Optimization</text><text x="1075" y="232" text-anchor="middle" class="as">blocking</text><text x="1075" y="260" text-anchor="middle" class="as">online softmax</text><text x="1075" y="288" text-anchor="middle" class="as">avoid full</text><text x="1075" y="316" text-anchor="middle" class="as">[B,H,S,S]</text>
+</svg>
+</div>
+
+<p>FlashAttention 类优化的核心不是改变数学公式，而是改变执行方式：按 block 计算 $QK^T$，在线维护 softmax 的 max 和 sum，不完整写出 scores/probs，从而减少 HBM/global memory traffic。</p>
+<h2 id="优化到底在优化什么"><a href="#优化到底在优化什么" class="headerlink" title="优化到底在优化什么"></a>优化到底在优化什么</h2><div class="table-container">
+<table>
+<thead>
+<tr>
+<th>优化项</th>
+<th>专业含义</th>
+<th>主要目的</th>
+<th>例子</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Operator Fusion</td>
+<td>多个相邻算子合成 fused kernel</td>
+<td>减少中间张量和 kernel launch</td>
+<td>MatMul + Bias + ReLU</td>
+</tr>
+<tr>
+<td>Layout Optimization</td>
+<td>选择硬件友好的内存布局</td>
+<td>提高连续访存和对齐效率</td>
+<td>NCHW、NHWC、blocked layout</td>
+</tr>
+<tr>
+<td>Memory Planning</td>
+<td>规划 buffer 生命周期和复用</td>
+<td>降低峰值设备内存</td>
+<td>activation buffer reuse</td>
+</tr>
+<tr>
+<td>Kernel Selection</td>
+<td>根据 shape/dtype/layout 选实现</td>
+<td>提高单算子性能</td>
+<td>small GEMM vs large GEMM</td>
+</tr>
+<tr>
+<td>Tiling / Blocking</td>
+<td>把大计算切成 tile</td>
+<td>提高片上缓存复用</td>
+<td>MatMul 的 M/N/K tile</td>
+</tr>
+<tr>
+<td>Quantization</td>
+<td>降低数值精度</td>
+<td>降低带宽和存储，提高吞吐</td>
+<td>FP16、BF16、INT8、INT4</td>
+</tr>
+<tr>
+<td>DMA/Compute Overlap</td>
+<td>搬运和计算流水化</td>
+<td>隐藏 DMA latency</td>
+<td>double buffering</td>
+</tr>
+<tr>
+<td>Continuous Batching</td>
+<td>动态合并在线请求</td>
+<td>提高 LLM serving 吞吐</td>
+<td>vLLM scheduler</td>
+</tr>
+<tr>
+<td>KV Cache Paging</td>
+<td>按 block 管理 KV cache</td>
+<td>降低碎片，提高并发</td>
+<td>vLLM PagedAttention</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Arithmetic intensity 可以帮助判断算子更可能受计算限制还是带宽限制：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">AI = FLOPs / Bytes moved</span><br></pre></td></tr></table></figure>
+<p>如果 $AI$ 很低，算子通常更容易受内存带宽限制；如果 $AI$ 很高，才更可能受计算单元吞吐限制。</p>
+<h2 id="最后总结"><a href="#最后总结" class="headerlink" title="最后总结"></a>最后总结</h2><p>整条链路可以概括为：Large Model 定义任务语义，Framework 或 vLLM 负责模型表达与在线服务，Computational Graph 将模型分解为 Operators，Compiler 或 Backend Runtime 选择和生成 Operator Kernels，Runtime 通过 Linux Driver 提交硬件任务，TPU Hardware 最终执行这些算子内核。</p>
+<p>更短地说：模型由算子组成，算子由硬件内核执行，Runtime 通过 Linux 驱动把硬件任务提交给 TPU。Linux kernel 让 TPU 能被系统安全访问；TPU operator kernel 让算子能在 TPU 上高效计算；vLLM 让大模型在线推理能高吞吐地调度请求和管理 KV cache。</p>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          
+
+<div class="post-copyright">
+<ul>
+  <li class="post-copyright-author">
+      <strong>Post author:  </strong>zzz
+  </li>
+  <li class="post-copyright-link">
+      <strong>Post link: </strong>
+      <a href="http://wazhb.com/2026/06/10/20260610-tpu-model-compiler-kernel-vllm-linux/" title="从大模型到 TPU 执行：框架、算子、内核、DLC、vLLM 与 Linux 内核">http://wazhb.com/2026/06/10/20260610-tpu-model-compiler-kernel-vllm-linux/</a>
+  </li>
+  <li class="post-copyright-license">
+    <strong>Copyright Notice:  </strong>All articles in this blog are licensed under <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/deed.zh" rel="noopener" target="_blank"><i class="fab fa-fw fa-creative-commons"></i>BY-NC-SA</a> unless stating additionally.
+  </li>
+</ul>
+</div>
+
+          <div class="post-tags">
+              
+              <a href="/tags/TPU/" rel="tag"><i class="fa fa-tag"></i> TPU</a>
+              
+              <a href="/tags/LLM/" rel="tag"><i class="fa fa-tag"></i> LLM</a>
+              
+              <a href="/tags/vLLM/" rel="tag"><i class="fa fa-tag"></i> vLLM</a>
+              
+              <a href="/tags/Compiler/" rel="tag"><i class="fa fa-tag"></i> Compiler</a>
+              
+              <a href="/tags/Linux/" rel="tag"><i class="fa fa-tag"></i> Linux</a>
+              
+              <a href="/tags/Kernel/" rel="tag"><i class="fa fa-tag"></i> Kernel</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2024/06/23/IDT&GDT/" rel="prev" title="中断设置和键鼠处理">
+                  <i class="fa fa-chevron-left"></i> 中断设置和键鼠处理
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/2026/06/10/20260610-write-agent-learning/" rel="next" title="如何写一个 Agent：从最小 Runtime 到 Coding Agent">
+                  如何写一个 Agent：从最小 Runtime 到 Coding Agent <i class="fa fa-chevron-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+<script src="/js/comments.js"></script>
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+
+<div class="copyright">
+  &copy; 2020 – 
+  <span itemprop="copyrightYear">2026</span>
+  <span class="with-love">
+    <i class="fa fa-heart"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">zzz</span>
+</div>
+<div class="busuanzi-count">
+    <span class="post-meta-item" id="busuanzi_container_site_uv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-user"></i>
+      </span>
+      <span class="site-uv" title="Total Visitors">
+        <span id="busuanzi_value_site_uv"></span>
+      </span>
+    </span>
+    <span class="post-meta-item" id="busuanzi_container_site_pv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-eye"></i>
+      </span>
+      <span class="site-pv" title="Total Views">
+        <span id="busuanzi_value_site_pv"></span>
+      </span>
+    </span>
+</div>
+
+
+    <script async src="//dn-lbstatics.qbox.me/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+
+    </div>
+  </footer>
+
+  
+  <script src="https://cdn.jsdelivr.net/npm/animejs@3.2.1/lib/anime.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jquery@3.6.0/dist/jquery.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@fancyapps/fancybox@3.5.7/dist/jquery.fancybox.min.js"></script>
+<script src="/js/utils.js"></script><script src="/js/motion.js"></script><script src="/js/next-boot.js"></script>
+
+  
+<script src="/js/third-party/search/local-search.js"></script>
+
+
+
+
+
+
+  
+  <script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+
+
+
+  
+
+  <script class="next-config" data-name="enableMath" type="application/json">true</script><script class="next-config" data-name="mathjax" type="application/json">{&quot;enable&quot;:true,&quot;tags&quot;:&quot;none&quot;,&quot;js&quot;:&quot;https:&#x2F;&#x2F;cdn.jsdelivr.net&#x2F;npm&#x2F;mathjax@3.1.2&#x2F;es5&#x2F;tex-mml-chtml.js&quot;}</script>
+<script src="/js/third-party/math/mathjax.js"></script>
+
+
+
+</body>
+</html>

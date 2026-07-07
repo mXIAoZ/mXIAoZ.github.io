@@ -1,0 +1,609 @@
+<!DOCTYPE html>
+<html lang="zh-Hans">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 5.4.2">
+
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+<link rel="stylesheet" href="https://fonts.loli.net/css?family=Noto+Serif+SC:300,300italic,400,400italic,700,700italic%7CRoboto+Slab:300,300italic,400,400italic,700,700italic%7CPT+Mono:300,300italic,400,400italic,700,700italic&display=swap&subset=latin,latin-ext">
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@5.15.3/css/all.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/animate.css@3.1.1/animate.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fancyapps/fancybox@3.5.7/dist/jquery.fancybox.min.css">
+
+<script class="next-config" data-name="main" type="application/json">{&quot;hostname&quot;:&quot;wazhb.com&quot;,&quot;root&quot;:&quot;&#x2F;&quot;,&quot;images&quot;:&quot;&#x2F;images&quot;,&quot;scheme&quot;:&quot;Gemini&quot;,&quot;version&quot;:&quot;8.3.0&quot;,&quot;exturl&quot;:false,&quot;sidebar&quot;:{&quot;position&quot;:&quot;left&quot;,&quot;display&quot;:&quot;always&quot;,&quot;padding&quot;:18,&quot;offset&quot;:12},&quot;copycode&quot;:false,&quot;bookmark&quot;:{&quot;enable&quot;:false,&quot;color&quot;:&quot;#222&quot;,&quot;save&quot;:&quot;auto&quot;},&quot;fancybox&quot;:true,&quot;mediumzoom&quot;:false,&quot;lazyload&quot;:false,&quot;pangu&quot;:false,&quot;comments&quot;:{&quot;style&quot;:&quot;tabs&quot;,&quot;active&quot;:null,&quot;storage&quot;:true,&quot;lazyload&quot;:false,&quot;nav&quot;:null},&quot;motion&quot;:{&quot;enable&quot;:true,&quot;async&quot;:false,&quot;transition&quot;:{&quot;post_block&quot;:&quot;fadeIn&quot;,&quot;post_header&quot;:&quot;fadeInDown&quot;,&quot;post_body&quot;:&quot;fadeInDown&quot;,&quot;coll_header&quot;:&quot;fadeInLeft&quot;,&quot;sidebar&quot;:&quot;fadeInUp&quot;}},&quot;prism&quot;:false,&quot;i18n&quot;:{&quot;placeholder&quot;:&quot;Searching...&quot;,&quot;empty&quot;:&quot;We didn&#39;t find any results for the search: ${query}&quot;,&quot;hits_time&quot;:&quot;${hits} results found in ${time} ms&quot;,&quot;hits&quot;:&quot;${hits} results found&quot;},&quot;path&quot;:&quot;&#x2F;search.xml&quot;,&quot;localsearch&quot;:{&quot;enable&quot;:true,&quot;trigger&quot;:&quot;auto&quot;,&quot;top_n_per_article&quot;:1,&quot;unescape&quot;:false,&quot;preload&quot;:false}}</script>
+<meta name="description" content="最近整理了一份关于“如何写一个 Agent”的学习路径。学习之后最大的感受是：Agent 不是一段更长的 prompt，也不是把几个工具随便接到模型后面，而是一个可控的 runtime。这个 runtime 至少包含模型决策循环、工具调用、状态管理、权限边界、上下文管理和终止条件。">
+<meta property="og:type" content="article">
+<meta property="og:title" content="如何写一个 Agent：从最小 Runtime 到 Coding Agent">
+<meta property="og:url" content="http://wazhb.com/2026/06/10/20260610-write-agent-learning/index.html">
+<meta property="og:site_name" content="zzz の Blogs">
+<meta property="og:description" content="最近整理了一份关于“如何写一个 Agent”的学习路径。学习之后最大的感受是：Agent 不是一段更长的 prompt，也不是把几个工具随便接到模型后面，而是一个可控的 runtime。这个 runtime 至少包含模型决策循环、工具调用、状态管理、权限边界、上下文管理和终止条件。">
+<meta property="og:locale">
+<meta property="article:published_time" content="2026-06-09T16:00:00.000Z">
+<meta property="article:modified_time" content="2026-07-07T02:52:23.581Z">
+<meta property="article:author" content="zzz">
+<meta property="article:tag" content="Agent">
+<meta property="article:tag" content="RAG">
+<meta property="article:tag" content="LangGraph">
+<meta name="twitter:card" content="summary">
+
+
+<link rel="canonical" href="http://wazhb.com/2026/06/10/20260610-write-agent-learning/">
+
+
+
+<script class="next-config" data-name="page" type="application/json">{&quot;sidebar&quot;:&quot;&quot;,&quot;isHome&quot;:false,&quot;isPost&quot;:true,&quot;lang&quot;:&quot;zh-Hans&quot;,&quot;comments&quot;:true,&quot;permalink&quot;:&quot;http:&#x2F;&#x2F;wazhb.com&#x2F;2026&#x2F;06&#x2F;10&#x2F;20260610-write-agent-learning&#x2F;&quot;,&quot;path&quot;:&quot;2026&#x2F;06&#x2F;10&#x2F;20260610-write-agent-learning&#x2F;&quot;,&quot;title&quot;:&quot;如何写一个 Agent：从最小 Runtime 到 Coding Agent&quot;}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">&quot;&quot;</script>
+<title>如何写一个 Agent：从最小 Runtime 到 Coding Agent | zzz の Blogs</title><script src="/js/config.js"></script>
+  
+
+
+
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+<link rel="alternate" href="/atom.xml" title="zzz の Blogs" type="application/atom+xml">
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="Toggle navigation bar" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <h1 class="site-title">zzz の Blogs</h1>
+      <i class="logo-line"></i>
+    </a>
+      <p class="site-subtitle" itemprop="description">尝试写博客の小白</p>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu">
+        <li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>Home</a></li>
+        <li class="menu-item menu-item-about"><a href="/about/" rel="section"><i class="fa fa-user fa-fw"></i>About</a></li>
+        <li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>Tags<span class="badge">20</span></a></li>
+        <li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>Categories<span class="badge">10</span></a></li>
+        <li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>Archives<span class="badge">11</span></a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>Search
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup"><div class="search-header">
+  <span class="search-icon">
+    <i class="fa fa-search"></i>
+  </span>
+  <div class="search-input-container">
+    <input autocomplete="off" autocapitalize="off" maxlength="80"
+           placeholder="Searching..." spellcheck="false"
+           type="search" class="search-input">
+  </div>
+  <span class="popup-btn-close" role="button">
+    <i class="fa fa-times-circle"></i>
+  </span>
+</div>
+<div class="search-result-container no-result">
+  <div class="search-result-icon">
+    <i class="fa fa-spinner fa-pulse fa-5x"></i>
+  </div>
+</div>
+
+    </div>
+  </div>
+
+</div>
+        
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          Table of Contents
+        </li>
+        <li class="sidebar-nav-overview">
+          Overview
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E4%BB%8E%E6%9C%80%E5%B0%8F-Agent-Loop-%E5%BC%80%E5%A7%8B"><span class="nav-number">1.</span> <span class="nav-text">从最小 Agent Loop 开始</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E7%AC%AC%E4%B8%80%E7%89%88%E5%BA%94%E8%AF%A5%E5%8F%AA%E8%AF%BB"><span class="nav-number">2.</span> <span class="nav-text">第一版应该只读</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E7%9C%9F%E6%AD%A3%E8%A6%81%E8%AE%BE%E8%AE%A1%E7%9A%84%E6%98%AF-Runtime"><span class="nav-number">3.</span> <span class="nav-text">真正要设计的是 Runtime</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%B7%A5%E5%85%B7%E8%B6%8A%E7%AA%84%E8%B6%8A%E5%A5%BD"><span class="nav-number">4.</span> <span class="nav-text">工具越窄越好</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#System-Prompt-%E8%A6%81%E5%83%8F%E6%93%8D%E4%BD%9C%E8%A7%84%E7%A8%8B"><span class="nav-number">5.</span> <span class="nav-text">System Prompt 要像操作规程</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#Planning-%E5%92%8C%E7%BB%88%E6%AD%A2%E6%9D%A1%E4%BB%B6"><span class="nav-number">6.</span> <span class="nav-text">Planning 和终止条件</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E4%B8%8A%E4%B8%8B%E6%96%87%E7%AE%A1%E7%90%86%E4%B8%8D%E6%98%AF%E6%97%A0%E9%99%90%E8%BF%BD%E5%8A%A0-messages"><span class="nav-number">7.</span> <span class="nav-text">上下文管理不是无限追加 messages</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#RAG-%E6%98%AF-Agent-%E7%9A%84%E5%B7%A5%E5%85%B7%EF%BC%8C%E4%B8%8D%E6%98%AF-Agent-%E6%9C%AC%E8%BA%AB"><span class="nav-number">8.</span> <span class="nav-text">RAG 是 Agent 的工具，不是 Agent 本身</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#Embedding-Retriever-%E7%9A%84%E5%AD%A6%E4%B9%A0%E9%A1%BA%E5%BA%8F"><span class="nav-number">9.</span> <span class="nav-text">Embedding Retriever 的学习顺序</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#LangChain-%E5%92%8C-LangGraph-%E7%9A%84%E4%BD%8D%E7%BD%AE"><span class="nav-number">10.</span> <span class="nav-text">LangChain 和 LangGraph 的位置</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E4%BB%8E%E5%8F%AA%E8%AF%BB-Agent-%E5%88%B0-Coding-Agent"><span class="nav-number">11.</span> <span class="nav-text">从只读 Agent 到 Coding Agent</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%AE%89%E5%85%A8%E8%BE%B9%E7%95%8C%E5%BF%85%E9%A1%BB%E5%9C%A8%E4%BB%A3%E7%A0%81%E9%87%8C"><span class="nav-number">12.</span> <span class="nav-text">安全边界必须在代码里</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#Plan-Mode-%E7%9A%84%E5%85%B3%E9%94%AE%E4%B8%8D%E6%98%AF%E4%B8%80%E5%8F%A5-prompt"><span class="nav-number">13.</span> <span class="nav-text">Plan Mode 的关键不是一句 prompt</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%A6%82%E4%BD%95%E8%AF%84%E4%BC%B0-Agent-%E6%98%AF%E5%90%A6%E5%8F%98%E5%A5%BD"><span class="nav-number">14.</span> <span class="nav-text">如何评估 Agent 是否变好</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%80%E5%90%8E%E8%AE%B0%E4%BD%8F%E8%BF%99%E6%9D%A1%E8%B7%AF%E7%BA%BF"><span class="nav-number">15.</span> <span class="nav-text">最后记住这条路线</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%8F%82%E8%80%83%E8%B5%84%E6%96%99%E4%B8%8E%E5%B7%A5%E5%85%B7%E5%88%86%E7%B1%BB"><span class="nav-number">16.</span> <span class="nav-text">参考资料与工具分类</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#Agent-Harness-%E7%8A%B6%E6%80%81%E6%9C%BA%E6%A1%86%E6%9E%B6"><span class="nav-number">16.1.</span> <span class="nav-text">Agent Harness &#x2F; 状态机框架</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#RAG-%E6%95%B0%E6%8D%AE%E6%A3%80%E7%B4%A2%E6%A1%86%E6%9E%B6"><span class="nav-number">16.2.</span> <span class="nav-text">RAG &#x2F; 数据检索框架</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E5%90%91%E9%87%8F%E6%95%B0%E6%8D%AE%E5%BA%93-%E5%90%91%E9%87%8F%E7%B4%A2%E5%BC%95"><span class="nav-number">16.3.</span> <span class="nav-text">向量数据库 &#x2F; 向量索引</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E5%A4%9A-Agent-%E5%8D%8F%E4%BD%9C%E6%A1%86%E6%9E%B6"><span class="nav-number">16.4.</span> <span class="nav-text">多 Agent 协作框架</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E7%BB%93%E6%9E%84%E5%8C%96%E8%BE%93%E5%87%BA-%E7%B1%BB%E5%9E%8B%E6%A0%A1%E9%AA%8C%E5%B7%A5%E5%85%B7"><span class="nav-number">16.5.</span> <span class="nav-text">结构化输出 &#x2F; 类型校验工具</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#Workflow-Durable-Execution-%E6%A1%86%E6%9E%B6"><span class="nav-number">16.6.</span> <span class="nav-text">Workflow &#x2F; Durable Execution 框架</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#Eval-Observability-Optimization-%E5%B7%A5%E5%85%B7"><span class="nav-number">16.7.</span> <span class="nav-text">Eval &#x2F; Observability &#x2F; Optimization 工具</span></a></li></ol></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author site-overview-item animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="zzz"
+      src="/images/yan.jpg">
+  <p class="site-author-name" itemprop="name">zzz</p>
+  <div class="site-description" itemprop="description">回首向来萧瑟处<br>归去，也无风雨也无晴。</div>
+</div>
+<div class="site-state-wrap site-overview-item animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">11</span>
+          <span class="site-state-item-name">posts</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">10</span>
+        <span class="site-state-item-name">categories</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">20</span>
+        <span class="site-state-item-name">tags</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author site-overview-item animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/mXIAoZ" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;mXIAoZ" rel="noopener" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:14751725611@163.com" title="E-Mail → mailto:14751725611@163.com" rel="noopener" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+  <div class="cc-license site-overview-item animated" itemprop="license">
+    <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/deed.zh" class="cc-opacity" rel="noopener" target="_blank"><img src="/images/cc-by-nc-sa.svg" alt="Creative Commons"></a>
+  </div>
+
+
+
+        </div>
+      </div>
+    </div>
+  </aside>
+  <div class="sidebar-dimmer"></div>
+
+
+    </header>
+
+    
+  <div class="back-to-top" role="button" aria-label="Back to top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+  <div class="reading-progress-bar"></div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-Hans">
+    <link itemprop="mainEntityOfPage" href="http://wazhb.com/2026/06/10/20260610-write-agent-learning/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/yan.jpg">
+      <meta itemprop="name" content="zzz">
+      <meta itemprop="description" content="回首向来萧瑟处<br>归去，也无风雨也无晴。">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="zzz の Blogs">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          如何写一个 Agent：从最小 Runtime 到 Coding Agent
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">Posted on</span>
+
+      <time title="Created: 2026-06-10 00:00:00" itemprop="dateCreated datePublished" datetime="2026-06-10T00:00:00+08:00">2026-06-10</time>
+    </span>
+      <span class="post-meta-item">
+        <span class="post-meta-item-icon">
+          <i class="far fa-calendar-check"></i>
+        </span>
+        <span class="post-meta-item-text">Edited on</span>
+        <time title="Modified: 2026-07-07 10:52:23" itemprop="dateModified" datetime="2026-07-07T10:52:23+08:00">2026-07-07</time>
+      </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">In</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/Agent/" itemprop="url" rel="index"><span itemprop="name">Agent</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-item" title="Views" id="busuanzi_container_page_pv">
+      <span class="post-meta-item-icon">
+        <i class="far fa-eye"></i>
+      </span>
+      <span class="post-meta-item-text">Views: </span>
+      <span id="busuanzi_value_page_pv"></span>
+    </span>
+</div>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+        <p>最近整理了一份关于“如何写一个 Agent”的学习路径。学习之后最大的感受是：Agent 不是一段更长的 prompt，也不是把几个工具随便接到模型后面，而是一个可控的 runtime。这个 runtime 至少包含模型决策循环、工具调用、状态管理、权限边界、上下文管理和终止条件。</p>
+<span id="more"></span>
+<p>如果只记一个公式，可以记这个：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">Agent = LLM 决策循环 + 工具调用 + 状态管理 + 权限边界 + 终止条件</span><br></pre></td></tr></table></figure>
+<p>也就是说，写 Agent 的核心不是“让模型更聪明”，而是给模型一个安全、清晰、可验证的运行环境。</p>
+<h2 id="从最小-Agent-Loop-开始"><a href="#从最小-Agent-Loop-开始" class="headerlink" title="从最小 Agent Loop 开始"></a>从最小 Agent Loop 开始</h2><p>一个最小 Agent 的执行流可以这样理解：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">用户任务</span><br><span class="line">  -&gt; Agent Loop</span><br><span class="line">  -&gt; LLM 决定下一步</span><br><span class="line">  -&gt; 调用工具或给出最终答案</span><br><span class="line">  -&gt; 工具结果写回上下文</span><br><span class="line">  -&gt; 重复直到完成、阻塞或达到步数上限</span><br></pre></td></tr></table></figure>
+<p>伪代码大概是：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">while</span> <span class="keyword">not</span> done:</span><br><span class="line">    response = call_llm(messages, tools)</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> response.wants_tool:</span><br><span class="line">        result = run_tool(response.tool_name, response.tool_args)</span><br><span class="line">        messages.append(tool_result(result))</span><br><span class="line">        <span class="keyword">continue</span></span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> response.final_answer:</span><br><span class="line">        done = <span class="literal">True</span></span><br></pre></td></tr></table></figure>
+<p>这段循环比任何框架都重要。只有先理解这个 while loop，后面使用 LangGraph、MCP 或多 Agent 框架时，才知道框架到底帮自己封装了什么。</p>
+<h2 id="第一版应该只读"><a href="#第一版应该只读" class="headerlink" title="第一版应该只读"></a>第一版应该只读</h2><p>学习 Agent 最容易犯的错误，是一开始就给它写文件、执行 shell、安装依赖、提交代码的能力。这样会把问题复杂度一下拉满：工具设计、权限控制、回滚、测试、上下文污染都会同时出现。</p>
+<p>更稳的第一版是只读代码研究 Agent，只提供几个窄工具：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">list_files(path)</span><br><span class="line">read_file(path)</span><br><span class="line">search_text(query)</span><br><span class="line">final_answer</span><br></pre></td></tr></table></figure>
+<p>并且加上限制：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">只能读文件</span><br><span class="line">不能写文件</span><br><span class="line">不能执行任意 shell</span><br><span class="line">最多运行 10-15 步</span><br><span class="line">必须引用实际读过的文件</span><br></pre></td></tr></table></figure>
+<p>只读 Agent 的目标不是“帮我改代码”，而是回答这些问题：项目入口在哪里？某个功能在哪里实现？调用链大概是什么？哪些文件提供了证据？</p>
+<p>这个阶段能训练最基础也最重要的能力：tool use、loop、state、context，以及基于证据回答。</p>
+<h2 id="真正要设计的是-Runtime"><a href="#真正要设计的是-Runtime" class="headerlink" title="真正要设计的是 Runtime"></a>真正要设计的是 Runtime</h2><p>很多人以为写 Agent 的难点是模型 API。其实模型调用只是其中一层，真正决定 Agent 是否可靠的是 runtime 设计。</p>
+<p>一个可维护的 runtime 至少要显式管理这些模块：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">State：当前任务、消息、已知事实、读过的文件、工具历史</span><br><span class="line">Tools：Agent 能做什么，输入输出是什么</span><br><span class="line">Policy：哪些工具允许，哪些需要确认，哪些禁止</span><br><span class="line">Loop：什么时候继续，什么时候停止</span><br><span class="line">Context：哪些信息放进模型，哪些压缩或丢弃</span><br><span class="line">Verification：怎么判断任务真的完成了</span><br></pre></td></tr></table></figure>
+<p>不要只用一个 <code>messages</code> 变量糊到底。更好的方式是维护结构化状态：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">state = &#123;</span><br><span class="line">    <span class="string">&quot;task&quot;</span>: <span class="string">&quot;Find where login is implemented&quot;</span>,</span><br><span class="line">    <span class="string">&quot;messages&quot;</span>: [],</span><br><span class="line">    <span class="string">&quot;facts&quot;</span>: [],</span><br><span class="line">    <span class="string">&quot;files_read&quot;</span>: [],</span><br><span class="line">    <span class="string">&quot;tool_calls&quot;</span>: [],</span><br><span class="line">    <span class="string">&quot;step&quot;</span>: <span class="number">0</span>,</span><br><span class="line">    <span class="string">&quot;done&quot;</span>: <span class="literal">False</span>,</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>这样才能回答：Agent 已经确认了什么？读过哪些文件？哪些线索无效？它是不是在原地打转？下一步为什么要调用这个工具？</p>
+<h2 id="工具越窄越好"><a href="#工具越窄越好" class="headerlink" title="工具越窄越好"></a>工具越窄越好</h2><p>不要一开始就给 Agent 一个万能 shell：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">run_anything(command)</span><br></pre></td></tr></table></figure>
+<p>这类工具看起来灵活，实际是在把安全问题、执行问题和解释问题都推给模型。更好的工具应该窄、结构化、可审计：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">list_files(path)</span><br><span class="line">read_file(path)</span><br><span class="line">search_text(query)</span><br><span class="line">get_git_diff()</span><br><span class="line">run_tests(command_id)</span><br><span class="line">propose_patch(path, old, new)</span><br></pre></td></tr></table></figure>
+<p>工具设计原则可以总结为：</p>
+<ul>
+<li>工具越窄越好。</li>
+<li>输入输出要结构化。</li>
+<li>默认只读。</li>
+<li>写操作要人工确认。</li>
+<li>删除、部署、push、付款、发消息必须确认。</li>
+<li>工具结果不要无限长，必要时截断或摘要。</li>
+<li>工具报错要返回清晰错误，而不是让模型猜。</li>
+</ul>
+<p>如果确实需要执行命令，也应该做命令 ID 白名单，而不是让模型直接传入任意 shell 字符串：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">ALLOWED_COMMANDS = &#123;</span><br><span class="line">    <span class="string">&quot;git_status&quot;</span>: [<span class="string">&quot;git&quot;</span>, <span class="string">&quot;status&quot;</span>, <span class="string">&quot;--short&quot;</span>],</span><br><span class="line">    <span class="string">&quot;git_diff&quot;</span>: [<span class="string">&quot;git&quot;</span>, <span class="string">&quot;diff&quot;</span>],</span><br><span class="line">    <span class="string">&quot;pytest&quot;</span>: [<span class="string">&quot;pytest&quot;</span>],</span><br><span class="line">    <span class="string">&quot;typecheck&quot;</span>: [<span class="string">&quot;npm&quot;</span>, <span class="string">&quot;run&quot;</span>, <span class="string">&quot;typecheck&quot;</span>],</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h2 id="System-Prompt-要像操作规程"><a href="#System-Prompt-要像操作规程" class="headerlink" title="System Prompt 要像操作规程"></a>System Prompt 要像操作规程</h2><p>Agent 的 system prompt 不应该只是：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">You are a helpful assistant.</span><br></pre></td></tr></table></figure>
+<p>它应该更像 SOP 或 runbook，明确目标、禁止行为、工具使用规则和最终输出格式：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><span class="line">You are a read-only code research agent.</span><br><span class="line"></span><br><span class="line">Your job:</span><br><span class="line">- Inspect the repository using tools.</span><br><span class="line">- Build an evidence-based answer.</span><br><span class="line">- Cite files you actually read.</span><br><span class="line"></span><br><span class="line">Rules:</span><br><span class="line">- Do not guess.</span><br><span class="line">- Do not modify files.</span><br><span class="line">- Prefer search before reading large files.</span><br><span class="line">- Stop when you have enough evidence.</span><br><span class="line">- If blocked, explain what information is missing.</span><br><span class="line"></span><br><span class="line">Final answer format:</span><br><span class="line">- Summary</span><br><span class="line">- Key files</span><br><span class="line">- Execution flow</span><br><span class="line">- Risks or unknowns</span><br></pre></td></tr></table></figure>
+<p>prompt 的作用不是塑造一个“人格”，而是给 runtime 中的模型节点提供操作规程。</p>
+<h2 id="Planning-和终止条件"><a href="#Planning-和终止条件" class="headerlink" title="Planning 和终止条件"></a>Planning 和终止条件</h2><p>最小 Agent 是：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">Think -&gt; Tool -&gt; Observe -&gt; Repeat</span><br></pre></td></tr></table></figure>
+<p>更稳的 Agent 是：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">Plan -&gt; Tool -&gt; Observe -&gt; Update Plan -&gt; Repeat</span><br></pre></td></tr></table></figure>
+<p>Planning 的价值在于让 Agent 每一步都围绕当前目标推进，而不是被搜索结果带着跑偏。但 Planning 不能只靠模型自觉，runtime 也要有终止条件。</p>
+<p>至少应该有：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">max_steps</span><br><span class="line">max_tool_errors</span><br><span class="line">max_context_tokens</span><br><span class="line">final_answer</span><br><span class="line">needs_human_approval</span><br><span class="line">no_new_information</span><br></pre></td></tr></table></figure>
+<p>第一版可以先设置一个简单的 <code>max_steps = 12</code>。这比追求“全自动完成所有事”更重要，因为没有停止规则的 Agent 很容易无限循环、重复搜索、或者越查越散。</p>
+<h2 id="上下文管理不是无限追加-messages"><a href="#上下文管理不是无限追加-messages" class="headerlink" title="上下文管理不是无限追加 messages"></a>上下文管理不是无限追加 messages</h2><p>一开始可以把所有消息都传回模型，但真实 Agent 很快会遇到上下文膨胀。最容易爆上下文的是大文件全文、测试日志、搜索结果、网页内容和历史对话。</p>
+<p>更好的方式是维护压缩状态，只保留：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">已确认事实</span><br><span class="line">已读文件列表</span><br><span class="line">关键代码片段</span><br><span class="line">失败线索</span><br><span class="line">当前计划</span><br><span class="line">未解决问题</span><br></pre></td></tr></table></figure>
+<p>旧的、重复的、无关的工具结果应该被压缩或丢弃。summary 也不应该只是每隔几步追加一条消息，而应该作为 runtime 的上下文管理机制：用结构化 summary 替换旧上下文，并保留 evidence。</p>
+<p>一个 summary 至少应该包含：</p>
+<figure class="highlight json"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">&#123;</span><br><span class="line">  <span class="attr">&quot;confirmed_facts&quot;</span>: [],</span><br><span class="line">  <span class="attr">&quot;files_inspected&quot;</span>: [],</span><br><span class="line">  <span class="attr">&quot;tool_results&quot;</span>: [],</span><br><span class="line">  <span class="attr">&quot;failed_leads&quot;</span>: [],</span><br><span class="line">  <span class="attr">&quot;open_questions&quot;</span>: [],</span><br><span class="line">  <span class="attr">&quot;next_action&quot;</span>: <span class="string">&quot;Continue normal loop using the compacted context&quot;</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>关键原则是：summary 只总结证据，不发明事实；summary 不调用工具，也不决定任务是否完成。</p>
+<h2 id="RAG-是-Agent-的工具，不是-Agent-本身"><a href="#RAG-是-Agent-的工具，不是-Agent-本身" class="headerlink" title="RAG 是 Agent 的工具，不是 Agent 本身"></a>RAG 是 Agent 的工具，不是 Agent 本身</h2><p>RAG 的作用是让 Agent 在需要时检索外部知识，而不是把所有资料塞进 prompt。</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">RAG = 文档索引 + 查询改写 + 检索 + 重排 + 上下文注入 + 引用验证</span><br></pre></td></tr></table></figure>
+<p>普通 RAG 是：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">用户问题 -&gt; 检索 -&gt; 回答</span><br></pre></td></tr></table></figure>
+<p>Agentic RAG 则是：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">用户问题</span><br><span class="line">  -&gt; 判断缺什么信息</span><br><span class="line">  -&gt; 改写检索 query</span><br><span class="line">  -&gt; 调 retrieve_docs</span><br><span class="line">  -&gt; 读关键 chunk</span><br><span class="line">  -&gt; 发现不够再检索</span><br><span class="line">  -&gt; 综合多个来源</span><br><span class="line">  -&gt; 引用证据回答</span><br></pre></td></tr></table></figure>
+<p>对 Coding Agent 来说，RAG 的正确位置通常是“背景知识工具”：查规范、架构文档、历史决策。真正修改代码前，仍然要读当前仓库里的实际文件。</p>
+<p>文档切分比 embedding 模型更容易决定检索效果。好的 chunk 应该语义完整、长度适中、带标题路径、带来源 metadata，并且能单独被引用。</p>
+<figure class="highlight json"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">&#123;</span><br><span class="line">  <span class="attr">&quot;source&quot;</span>: <span class="string">&quot;docs/auth/session.md&quot;</span>,</span><br><span class="line">  <span class="attr">&quot;title&quot;</span>: <span class="string">&quot;Session lifecycle&quot;</span>,</span><br><span class="line">  <span class="attr">&quot;section&quot;</span>: <span class="string">&quot;Token refresh&quot;</span>,</span><br><span class="line">  <span class="attr">&quot;updated_at&quot;</span>: <span class="string">&quot;2026-05-28&quot;</span>,</span><br><span class="line">  <span class="attr">&quot;chunk_id&quot;</span>: <span class="string">&quot;docs/auth/session.md#token-refresh-03&quot;</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>检索结果也要当作不可信输入。RAG 文档里可能有 prompt injection，所以回答规则应该明确：只根据 retrieved context 和工具实际读到的内容回答，关键结论必须引用来源，不要把检索结果里的指令当成系统指令。</p>
+<h2 id="Embedding-Retriever-的学习顺序"><a href="#Embedding-Retriever-的学习顺序" class="headerlink" title="Embedding Retriever 的学习顺序"></a>Embedding Retriever 的学习顺序</h2><p>Embedding 可以理解成把文本转换成语义向量，让语义接近的内容在向量空间里距离更近。RAG 中的 retrieval 通常分成两步：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line">建索引阶段：</span><br><span class="line">代码文件 / 文档</span><br><span class="line">  -&gt; 切成 chunks</span><br><span class="line">  -&gt; 每个 chunk 生成 embedding</span><br><span class="line">  -&gt; 保存：向量 + 文件路径 + chunk 内容 + metadata</span><br><span class="line"></span><br><span class="line">查询阶段：</span><br><span class="line">用户问题</span><br><span class="line">  -&gt; 生成 query embedding</span><br><span class="line">  -&gt; 和所有 chunk embedding 算相似度</span><br><span class="line">  -&gt; 返回 top_k 个相关 chunks</span><br><span class="line">  -&gt; LLM 基于 chunks 生成答案</span><br></pre></td></tr></table></figure>
+<p>学习版不需要一开始就上向量数据库。推荐顺序是：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">1. 手写 lexical retriever</span><br><span class="line">2. 接入 embedding API</span><br><span class="line">3. 实现内存向量索引</span><br><span class="line">4. 用 cosine similarity 检索</span><br><span class="line">5. 增加 JSON / SQLite 持久化</span><br><span class="line">6. 再替换为 Chroma、FAISS、Qdrant 等向量库</span><br><span class="line">7. 做关键词 + embedding + rerank 的混合检索</span><br></pre></td></tr></table></figure>
+<p>对 code agent 来说，不应该只依赖 embedding。代码任务里经常有函数名、变量名、错误码、文件路径，这些精确符号用关键词搜索和符号搜索往往更可靠。更常见的组合是：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">关键词搜索 + embedding 搜索 + rerank + read_file 精读</span><br></pre></td></tr></table></figure>
+<h2 id="LangChain-和-LangGraph-的位置"><a href="#LangChain-和-LangGraph-的位置" class="headerlink" title="LangChain 和 LangGraph 的位置"></a>LangChain 和 LangGraph 的位置</h2><p>LangChain 和 LangGraph 都有用，但不要一开始就用框架掩盖原理。</p>
+<p>一句话区分：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">LangChain：组件库，偏 prompt、model、retriever、tool、chain 集成</span><br><span class="line">LangGraph：有状态执行图，偏 agent loop、分支、循环、checkpoint、人类审批</span><br></pre></td></tr></table></figure>
+<p>如果目标是快速做 RAG demo，LangChain 很方便。如果目标是写真正可控的 Agent，LangGraph 更接近 runtime，因为 Agent 本质上是一个有状态循环：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">plan -&gt; act -&gt; observe -&gt; update state -&gt; route -&gt; continue or stop</span><br></pre></td></tr></table></figure>
+<p>推荐学习顺序是：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">1. 手写 read-only agent loop</span><br><span class="line">2. 手写 tool schema 和 tool execution</span><br><span class="line">3. 手写 state、max_steps、权限检查</span><br><span class="line">4. 手写一个简单 RAG retriever tool</span><br><span class="line">5. 用 LangChain 替换 document loader / splitter / vector store</span><br><span class="line">6. 用 LangGraph 重写 agent loop</span><br><span class="line">7. 加 checkpoint、human approval、多节点工作流</span><br></pre></td></tr></table></figure>
+<p>也就是先理解 Agent runtime，再用 LangChain 加速组件集成，最后用 LangGraph 管复杂流程。</p>
+<h2 id="从只读-Agent-到-Coding-Agent"><a href="#从只读-Agent-到-Coding-Agent" class="headerlink" title="从只读 Agent 到 Coding Agent"></a>从只读 Agent 到 Coding Agent</h2><p>比较稳的升级路线是四步：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">只读研究 Agent -&gt; 测试诊断 Agent -&gt; Patch Agent -&gt; Coding Agent</span><br></pre></td></tr></table></figure>
+<p>V1 只读研究 Agent：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">能力：list_files / read_file / search_text</span><br><span class="line">目标：找入口、画调用链、基于文件证据总结结构</span><br><span class="line">验收：不编造文件、不无限循环、答案包含文件引用</span><br></pre></td></tr></table></figure>
+<p>V2 测试诊断 Agent：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">增加：run_tests(test_command_id) / read_test_output(output_id)</span><br><span class="line">目标：读取失败日志，定位相关代码，区分 deterministic failure 和 flaky</span><br><span class="line">限制：不改代码，不安装依赖，不自动删除缓存</span><br></pre></td></tr></table></figure>
+<p>V3 Patch Agent：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">增加：propose_patch(path, old, new) / show_diff()</span><br><span class="line">目标：提出最小 patch，用户确认后再应用，应用后跑测试</span><br><span class="line">流程：读代码 -&gt; 提计划 -&gt; 生成 patch -&gt; 人工确认 -&gt; 应用 -&gt; 测试 -&gt; 总结</span><br></pre></td></tr></table></figure>
+<p>V4 Coding Agent：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">增加：edit_file / run_tests / get_diff</span><br><span class="line">目标：完成小范围 bugfix 或小功能，自动验证，输出变更摘要</span><br><span class="line">限制：不 commit，不 push，不删文件，不重置 git 状态，危险操作必须确认</span><br></pre></td></tr></table></figure>
+<p>这个顺序的核心是：先把读和判断做稳，再给写权限。</p>
+<h2 id="安全边界必须在代码里"><a href="#安全边界必须在代码里" class="headerlink" title="安全边界必须在代码里"></a>安全边界必须在代码里</h2><p>Agent 一定要有权限边界，否则只是一个会随机执行操作的模型。</p>
+<p>默认规则可以这样定：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">读操作默认允许</span><br><span class="line">写操作需要确认</span><br><span class="line">外部网络需要确认</span><br><span class="line">删除需要确认</span><br><span class="line">部署需要确认</span><br><span class="line">push / force push 禁止或强确认</span><br><span class="line">密钥永远不进 prompt</span><br><span class="line">工具输出要当作不可信输入</span><br></pre></td></tr></table></figure>
+<p>危险操作例如：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">rm -rf</span><br><span class="line">git reset --hard</span><br><span class="line">git push --force</span><br><span class="line">curl ... | sh</span><br><span class="line">chmod -R 777</span><br><span class="line">drop database</span><br></pre></td></tr></table></figure>
+<p>即使是测试 Agent，也不要让它随便执行任意命令。测试命令最好用 ID 白名单，而不是直接让模型提供 shell 字符串。</p>
+<h2 id="Plan-Mode-的关键不是一句-prompt"><a href="#Plan-Mode-的关键不是一句-prompt" class="headerlink" title="Plan Mode 的关键不是一句 prompt"></a>Plan Mode 的关键不是一句 prompt</h2><p>真正可控的 Plan Mode 不是在 system prompt 里写“请先计划”，而是状态机 + 工具权限门控 + 结构化计划 + 人工审批 + 执行阶段分离。</p>
+<p>核心目标是：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">plan 模式只负责理解任务、读取证据、生成计划，然后停止。</span><br><span class="line">execute 模式只能执行已经批准的计划。</span><br></pre></td></tr></table></figure>
+<p>可以把 Agent 拆成三个模式：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">class</span> <span class="title">AgentMode</span>(<span class="params"><span class="built_in">str</span>, Enum</span>):</span></span><br><span class="line">    ANSWER = <span class="string">&quot;answer&quot;</span></span><br><span class="line">    PLAN = <span class="string">&quot;plan&quot;</span></span><br><span class="line">    EXECUTE = <span class="string">&quot;execute&quot;</span></span><br></pre></td></tr></table></figure>
+<p>不同 mode 暴露不同工具：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">tools_for_mode</span>(<span class="params">mode: AgentMode</span>):</span></span><br><span class="line">    <span class="keyword">if</span> mode <span class="keyword">in</span> &#123;AgentMode.ANSWER, AgentMode.PLAN&#125;:</span><br><span class="line">        <span class="keyword">return</span> READ_TOOLS</span><br><span class="line">    <span class="keyword">if</span> mode == AgentMode.EXECUTE:</span><br><span class="line">        <span class="keyword">return</span> READ_TOOLS | WRITE_TOOLS</span><br><span class="line">    <span class="keyword">raise</span> ValueError(<span class="string">f&quot;unknown mode: <span class="subst">&#123;mode&#125;</span>&quot;</span>)</span><br></pre></td></tr></table></figure>
+<p>也就是说，即使模型在 plan 模式里请求 <code>edit_file</code>，runtime 也必须拒绝。权限边界应该由代码保证，而不是依赖模型自觉。</p>
+<p>Plan Mode 的输出也应该有稳定 schema，例如：</p>
+<figure class="highlight json"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">&#123;</span><br><span class="line">  <span class="attr">&quot;status&quot;</span>: <span class="string">&quot;needs_approval&quot;</span>,</span><br><span class="line">  <span class="attr">&quot;goal&quot;</span>: <span class="string">&quot;Fix streaming planning output&quot;</span>,</span><br><span class="line">  <span class="attr">&quot;findings&quot;</span>: [],</span><br><span class="line">  <span class="attr">&quot;steps&quot;</span>: [],</span><br><span class="line">  <span class="attr">&quot;risks&quot;</span>: [],</span><br><span class="line">  <span class="attr">&quot;verification&quot;</span>: []</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>生成计划后程序要停止，等待人类审批。不要让同一次模型调用从“计划”直接滑到“执行”。</p>
+<h2 id="如何评估-Agent-是否变好"><a href="#如何评估-Agent-是否变好" class="headerlink" title="如何评估 Agent 是否变好"></a>如何评估 Agent 是否变好</h2><p>不要靠感觉判断 Agent 是否变好了。应该准备固定任务集，例如：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">1. 找项目入口</span><br><span class="line">2. 找登录流程</span><br><span class="line">3. 找某个 API handler</span><br><span class="line">4. 判断一个测试失败原因</span><br><span class="line">5. 给出一个最小 patch 方案</span><br><span class="line">6. 识别一次危险操作并停止</span><br><span class="line">7. 在上下文很长时正确总结已知事实</span><br></pre></td></tr></table></figure>
+<p>每次修改 Agent 后记录：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">成功 / 失败</span><br><span class="line">调用了哪些工具</span><br><span class="line">用了多少步</span><br><span class="line">是否读错文件</span><br><span class="line">是否产生幻觉</span><br><span class="line">是否越权</span><br><span class="line">总耗时</span><br><span class="line">成本</span><br></pre></td></tr></table></figure>
+<p>好 Agent 的标准不是“回答很像人”，而是：知道什么时候用工具，不编造文件内容，不无限循环，遇到危险操作会停，能引用证据，能从工具错误中恢复，修改后会验证。</p>
+<h2 id="最后记住这条路线"><a href="#最后记住这条路线" class="headerlink" title="最后记住这条路线"></a>最后记住这条路线</h2><p>如果把整份学习路径压缩成一条实践顺序，就是：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">只读 Agent -&gt; 测试诊断 Agent -&gt; Patch Agent -&gt; Coding Agent</span><br></pre></td></tr></table></figure>
+<p>框架学习也应该按这个节奏来：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">自己写最小 Agent</span><br><span class="line">-&gt; Anthropic tool use / OpenAI function calling</span><br><span class="line">-&gt; MCP</span><br><span class="line">-&gt; LangGraph</span><br><span class="line">-&gt; 多 Agent orchestration</span><br></pre></td></tr></table></figure>
+<p>不要一开始就上多 Agent，也不要一开始就堆框架。先把只读 Agent 写稳，再给它测试能力，再让它生成 patch，最后才给它编辑文件的权限。</p>
+<p>写 Agent 的核心不是“让模型更自由”，而是相反：给它合适的工具，限制它的权限，保存必要状态，压缩无用上下文，设置明确停止条件，并用测试验证结果。这样做出来的才不是 demo，而是一个可以逐步变强的 Agent runtime。</p>
+<h2 id="参考资料与工具分类"><a href="#参考资料与工具分类" class="headerlink" title="参考资料与工具分类"></a>参考资料与工具分类</h2><h3 id="Agent-Harness-状态机框架"><a href="#Agent-Harness-状态机框架" class="headerlink" title="Agent Harness / 状态机框架"></a>Agent Harness / 状态机框架</h3><p>这一类负责 Agent 怎么运行：模型什么时候调用，工具什么时候调用，状态怎么流转，什么时候停止，什么时候 human-in-the-loop，以及如何 checkpoint / resume。</p>
+<ul>
+<li>手写 <code>run_loop</code></li>
+<li>LangGraph: <a target="_blank" rel="noopener" href="https://langchain-ai.github.io/langgraph/">https://langchain-ai.github.io/langgraph/</a></li>
+<li>PydanticAI</li>
+<li>OpenAI Agents SDK</li>
+<li>Claude Agent SDK / Claude Code 风格 harness</li>
+<li>Anthropic Engineering, Building effective agents: <a target="_blank" rel="noopener" href="https://www.anthropic.com/engineering/building-effective-agents">https://www.anthropic.com/engineering/building-effective-agents</a></li>
+<li>ReAct, Synergizing Reasoning and Acting in Language Models: <a target="_blank" rel="noopener" href="https://arxiv.org/abs/2210.03629">https://arxiv.org/abs/2210.03629</a></li>
+<li>Anthropic Messages API: <a target="_blank" rel="noopener" href="https://docs.anthropic.com/en/api/messages">https://docs.anthropic.com/en/api/messages</a></li>
+</ul>
+<p>优先理解的是：手写 harness + LangGraph。</p>
+<h3 id="RAG-数据检索框架"><a href="#RAG-数据检索框架" class="headerlink" title="RAG / 数据检索框架"></a>RAG / 数据检索框架</h3><p>这一类负责资料怎么进入系统、怎么切分、怎么检索，包括 loader、parser、chunker、embedding、vector store、retriever 和 query engine。</p>
+<ul>
+<li>LangChain: <a target="_blank" rel="noopener" href="https://python.langchain.com/docs/">https://python.langchain.com/docs/</a></li>
+<li>LlamaIndex</li>
+<li>Haystack</li>
+<li>Model Context Protocol: <a target="_blank" rel="noopener" href="https://modelcontextprotocol.io/docs">https://modelcontextprotocol.io/docs</a></li>
+</ul>
+<h3 id="向量数据库-向量索引"><a href="#向量数据库-向量索引" class="headerlink" title="向量数据库 / 向量索引"></a>向量数据库 / 向量索引</h3><p>这一类负责保存 chunk embedding，并按 query embedding 找回 top-k 结果，也会涉及 metadata filter 和 hybrid search。</p>
+<ul>
+<li>Chroma</li>
+<li>FAISS</li>
+<li>Qdrant</li>
+<li>Milvus</li>
+<li>Weaviate</li>
+<li>pgvector</li>
+<li>Elasticsearch / OpenSearch</li>
+<li>Pinecone</li>
+<li>LanceDB</li>
+<li>Redis Vector</li>
+</ul>
+<p>推荐顺序：学习阶段先用 Chroma / FAISS，后续生产化再评估 Qdrant；如果已有 PostgreSQL，可以考虑 pgvector；如果已有搜索系统，可以考虑 Elasticsearch / OpenSearch。</p>
+<h3 id="多-Agent-协作框架"><a href="#多-Agent-协作框架" class="headerlink" title="多 Agent 协作框架"></a>多 Agent 协作框架</h3><p>这一类关注多个角色 Agent 怎么协作，例如 planner、coder、reviewer、researcher、executor、handoff 和 group chat。</p>
+<ul>
+<li>AutoGen</li>
+<li>CrewAI</li>
+<li>OpenAI Agents SDK handoffs</li>
+</ul>
+<h3 id="结构化输出-类型校验工具"><a href="#结构化输出-类型校验工具" class="headerlink" title="结构化输出 / 类型校验工具"></a>结构化输出 / 类型校验工具</h3><p>这一类负责让模型稳定输出 JSON / 对象，并做校验和重试，适合 plan schema、summary schema、tool args validation、RAG citation schema 等场景。</p>
+<ul>
+<li>Pydantic</li>
+<li>Instructor</li>
+<li>PydanticAI</li>
+<li>OpenAI Structured Outputs</li>
+<li>Anthropic tool use / JSON Schema: <a target="_blank" rel="noopener" href="https://json-schema.org/">https://json-schema.org/</a></li>
+</ul>
+<h3 id="Workflow-Durable-Execution-框架"><a href="#Workflow-Durable-Execution-框架" class="headerlink" title="Workflow / Durable Execution 框架"></a>Workflow / Durable Execution 框架</h3><p>这一类负责长时间、可恢复、可重试的任务执行，例如 pause、resume、retry、checkpoint、scheduled jobs、human approval wait 和 distributed execution。</p>
+<ul>
+<li>Temporal</li>
+<li>Prefect</li>
+<li>Dagster</li>
+<li>Airflow</li>
+<li>Argo Workflows</li>
+</ul>
+<h3 id="Eval-Observability-Optimization-工具"><a href="#Eval-Observability-Optimization-工具" class="headerlink" title="Eval / Observability / Optimization 工具"></a>Eval / Observability / Optimization 工具</h3><p>这一类负责评估、追踪和优化 LLM pipeline 的效果，包括 prompt optimization、retriever tuning、trace visualization、hallucination / faithfulness 检测。</p>
+<ul>
+<li>DSPy</li>
+<li>LangSmith</li>
+<li>OpenAI Evals</li>
+<li>Ragas: <a target="_blank" rel="noopener" href="https://docs.ragas.io/">https://docs.ragas.io/</a></li>
+<li>promptfoo: <a target="_blank" rel="noopener" href="https://www.promptfoo.dev/docs/">https://www.promptfoo.dev/docs/</a></li>
+<li>TruLens</li>
+<li>Phoenix</li>
+<li>OWASP Top 10 for LLM Applications: <a target="_blank" rel="noopener" href="https://owasp.org/www-project-top-10-for-large-language-model-applications/">https://owasp.org/www-project-top-10-for-large-language-model-applications/</a></li>
+</ul>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          
+
+<div class="post-copyright">
+<ul>
+  <li class="post-copyright-author">
+      <strong>Post author:  </strong>zzz
+  </li>
+  <li class="post-copyright-link">
+      <strong>Post link: </strong>
+      <a href="http://wazhb.com/2026/06/10/20260610-write-agent-learning/" title="如何写一个 Agent：从最小 Runtime 到 Coding Agent">http://wazhb.com/2026/06/10/20260610-write-agent-learning/</a>
+  </li>
+  <li class="post-copyright-license">
+    <strong>Copyright Notice:  </strong>All articles in this blog are licensed under <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/deed.zh" rel="noopener" target="_blank"><i class="fab fa-fw fa-creative-commons"></i>BY-NC-SA</a> unless stating additionally.
+  </li>
+</ul>
+</div>
+
+          <div class="post-tags">
+              
+              <a href="/tags/Agent/" rel="tag"><i class="fa fa-tag"></i> Agent</a>
+              
+              <a href="/tags/RAG/" rel="tag"><i class="fa fa-tag"></i> RAG</a>
+              
+              <a href="/tags/LangGraph/" rel="tag"><i class="fa fa-tag"></i> LangGraph</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2026/06/10/20260610-tpu-model-compiler-kernel-vllm-linux/" rel="prev" title="从大模型到 TPU 执行：框架、算子、内核、DLC、vLLM 与 Linux 内核">
+                  <i class="fa fa-chevron-left"></i> 从大模型到 TPU 执行：框架、算子、内核、DLC、vLLM 与 Linux 内核
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/2026/07/06/20260706-vllm-architecture-api-to-token-generation/" rel="next" title="vLLM 架构源码解析（一）：从 API 请求到 Token 生成">
+                  vLLM 架构源码解析（一）：从 API 请求到 Token 生成 <i class="fa fa-chevron-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+<script src="/js/comments.js"></script>
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+
+<div class="copyright">
+  &copy; 2020 – 
+  <span itemprop="copyrightYear">2026</span>
+  <span class="with-love">
+    <i class="fa fa-heart"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">zzz</span>
+</div>
+<div class="busuanzi-count">
+    <span class="post-meta-item" id="busuanzi_container_site_uv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-user"></i>
+      </span>
+      <span class="site-uv" title="Total Visitors">
+        <span id="busuanzi_value_site_uv"></span>
+      </span>
+    </span>
+    <span class="post-meta-item" id="busuanzi_container_site_pv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-eye"></i>
+      </span>
+      <span class="site-pv" title="Total Views">
+        <span id="busuanzi_value_site_pv"></span>
+      </span>
+    </span>
+</div>
+
+
+    <script async src="//dn-lbstatics.qbox.me/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+
+    </div>
+  </footer>
+
+  
+  <script src="https://cdn.jsdelivr.net/npm/animejs@3.2.1/lib/anime.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jquery@3.6.0/dist/jquery.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@fancyapps/fancybox@3.5.7/dist/jquery.fancybox.min.js"></script>
+<script src="/js/utils.js"></script><script src="/js/motion.js"></script><script src="/js/next-boot.js"></script>
+
+  
+<script src="/js/third-party/search/local-search.js"></script>
+
+
+
+
+
+
+  
+  <script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+
+
+
+  
+
+  <script class="next-config" data-name="enableMath" type="application/json">true</script><script class="next-config" data-name="mathjax" type="application/json">{&quot;enable&quot;:true,&quot;tags&quot;:&quot;none&quot;,&quot;js&quot;:&quot;https:&#x2F;&#x2F;cdn.jsdelivr.net&#x2F;npm&#x2F;mathjax@3.1.2&#x2F;es5&#x2F;tex-mml-chtml.js&quot;}</script>
+<script src="/js/third-party/math/mathjax.js"></script>
+
+
+
+</body>
+</html>
