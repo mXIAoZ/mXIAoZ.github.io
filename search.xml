@@ -1776,10 +1776,15 @@
     <content><![CDATA[<h1 id="vLLM-深度解析（二）：PagedAttention-核心机制"><a href="#vLLM-深度解析（二）：PagedAttention-核心机制" class="headerlink" title="vLLM 深度解析（二）：PagedAttention 核心机制"></a>vLLM 深度解析（二）：PagedAttention 核心机制</h1><h2 id="1-引言"><a href="#1-引言" class="headerlink" title="1. 引言"></a>1. 引言</h2><p>vLLM 的核心贡献之一，是把操作系统分页思想引入 KV Cache 管理：模型仍然看到逻辑连续的 token 序列，但这些 token 的 K/V 可以分散存放在不同物理块中，再由 <code>block_table</code> 恢复逻辑顺序。这套机制降低了连续预留造成的浪费，也为公共前缀共享和长 Prompt 分段执行提供了统一的地址基础。</p>
 <span id="more"></span>
 <p>自回归生成每前进一步，都要读取历史 token 的 K/V，并把当前 token 的 K/V 追加到缓存。忽略量化、对齐和并行切分后，每个 token 的 KV Cache 大小近似为：</p>
-<script type="math/tex; mode=display">
+<div class="math-display">
+\[
 \text{KV bytes/token}
 =2\times N_{layers}\times N_{kv\_heads}\times d_{head}
-\times \text{bytes(dtype)}</script><p>例如，32 层、8 个 KV heads、<code>head_dim=128</code>、BF16 时，每个 token 约占 128 KiB；单个 32K 上下文约占 4 GiB。这个数值只对应上述模型形状，不能直接推广到其他模型。</p>
+\times \text{bytes(dtype)}
+\]
+</div>
+
+<p>例如，32 层、8 个 KV heads、<code>head_dim=128</code>、BF16 时，每个 token 约占 128 KiB；单个 32K 上下文约占 4 GiB。这个数值只对应上述模型形状，不能直接推广到其他模型。</p>
 <p>若为每个请求预留一段最大长度的连续空间，会同时出现三类问题：</p>
 <ul>
 <li><strong>过度预留</strong>：多数请求不会生成到长度上限；</li>
@@ -1798,9 +1803,14 @@
 <p>backend 选择、CUDA Graph 支持和 PagedAttention V1/V2 启发式都可能随版本变化。本文的源码路径与条件均限定在 vLLM <code>v0.11.0</code>。</p>
 </blockquote>
 <h2 id="2-FlashAttention：理解基础"><a href="#2-FlashAttention：理解基础" class="headerlink" title="2. FlashAttention：理解基础"></a>2. FlashAttention：理解基础</h2><h3 id="2-1-为什么需要-FlashAttention？"><a href="#2-1-为什么需要-FlashAttention？" class="headerlink" title="2.1 为什么需要 FlashAttention？"></a>2.1 为什么需要 FlashAttention？</h3><p>多 token self-attention，特别是 Prefill，通常写成：</p>
-<script type="math/tex; mode=display">
-S=QK^T,\qquad P=\operatorname{softmax}(S),\qquad O=PV</script><p>如果先完整计算 <code>S</code>、写回 HBM，再读出计算 <code>P</code>；随后再次写回、读出 <code>P</code> 计算 <code>O</code>，两个 $n\times n$ 中间矩阵会产生大量 HBM 流量，临时显存也随序列长度按 $O(n^2)$ 增长。</p>
-<p>这里必须区分 Prefill 与单 token Decode：Prefill 有多行 Query，完整 score 矩阵可能很大；Decode 通常只有一行 Query，单步 score 和 KV 读取随当前上下文近似按 $O(n)$ 增长。FlashAttention 的收益大小因此取决于 Query 长度、head size、dtype、GPU 和 kernel 实现，不能用固定倍率概括。</p>
+<div class="math-display">
+\[
+S=QK^T,\qquad P=\operatorname{softmax}(S),\qquad O=PV
+\]
+</div>
+
+<p>如果先完整计算 <code>S</code>、写回 HBM，再读出计算 <code>P</code>；随后再次写回、读出 <code>P</code> 计算 <code>O</code>，两个 \(n\times n\) 中间矩阵会产生大量 HBM 流量，临时显存也随序列长度按 \(O(n^2)\) 增长。</p>
+<p>这里必须区分 Prefill 与单 token Decode：Prefill 有多行 Query，完整 score 矩阵可能很大；Decode 通常只有一行 Query，单步 score 和 KV 读取随当前上下文近似按 \(O(n)\) 增长。FlashAttention 的收益大小因此取决于 Query 长度、head size、dtype、GPU 和 kernel 实现，不能用固定倍率概括。</p>
 <p>FlashAttention 的关键不是减少数学运算，而是使用 IO-aware tiling：</p>
 <div class="table-container">
 <table>
@@ -1829,18 +1839,33 @@ S=QK^T,\qquad P=\operatorname{softmax}(S),\qquad O=PV</script><p>如果先完整
 </table>
 </div>
 <p>它可能增加少量重计算，却显著减少大矩阵的 HBM 往返。计算吞吐与数据搬运速度的差距随硬件和 shape 改变，应以 profiler 中的带宽、算力利用率和 kernel 时间判断，而不是套用一个固定数字。</p>
-<h3 id="2-2-Online-Softmax-算法"><a href="#2-2-Online-Softmax-算法" class="headerlink" title="2.2 Online Softmax 算法"></a>2.2 Online Softmax 算法</h3><p>设已经处理过一部分 K/V tiles，并保存状态 $(m,l,A)$：</p>
+<h3 id="2-2-Online-Softmax-算法"><a href="#2-2-Online-Softmax-算法" class="headerlink" title="2.2 Online Softmax 算法"></a>2.2 Online Softmax 算法</h3><p>设已经处理过一部分 K/V tiles，并保存状态 \((m,l,A)\)：</p>
 <ul>
 <li><code>m</code>：当前行已经见过的最大 score；</li>
 <li><code>l</code>：在最大值基准下的指数和；</li>
 <li><code>A</code>：尚未除以 <code>l</code> 的输出累加器。</li>
 </ul>
-<p>对新的 score tile $S_j$ 和 Value tile $V_j$，稳定合并公式为：</p>
-<script type="math/tex; mode=display">
-m'=\max(m,\max S_j)</script><script type="math/tex; mode=display">
-l'=e^{m-m'}l+\sum e^{S_j-m'}</script><script type="math/tex; mode=display">
+<p>对新的 score tile \(S_j\) 和 Value tile \(V_j\)，稳定合并公式为：</p>
+<div class="math-display">
+\[
+m'=\max(m,\max S_j)
+\]
+</div>
+
+<div class="math-display">
+\[
+l'=e^{m-m'}l+\sum e^{S_j-m'}
+\]
+</div>
+
+<div class="math-display">
+\[
 A'=e^{m-m'}A+\sum e^{S_j-m'}V_j,
-\qquad O=A'/l'</script><p>每次更新都先把旧状态缩放到新的最大值基准，因此不会因为 score 很大而直接计算 <code>exp(score)</code>。遍历完全部 K/V tiles 后，得到的结果与普通 softmax 等价。</p>
+\qquad O=A'/l'
+\]
+</div>
+
+<p>每次更新都先把旧状态缩放到新的最大值基准，因此不会因为 score 很大而直接计算 <code>exp(score)</code>。遍历完全部 K/V tiles 后，得到的结果与普通 softmax 等价。</p>
 <p><img src="/images/vllm-pagedattention-core/01_flashattention_tile_flow.svg" alt="FlashAttention Tile 流程"></p>
 <p>一个常见的逻辑映射是 <code>CTA(request, query_head, query_tile)</code>：一个请求会产生多个 CTA；一个 CTA 只能完整驻留在一个 SM；SM 又会动态执行来自不同请求的 CTA。request、CUDA block 和 SM 不是一一对应关系。</p>
 <p>Tile 结束后，当前 <code>S/P/K/V</code> tile buffer 可以复用，但 HBM 中的 K/V 数据没有被删除。真正跨 tile 存活的是 Query tile 与 <code>(m,l,A)</code>。<code>Br/Bc</code> 还会同时受到以下因素限制：</p>
@@ -1851,12 +1876,27 @@ A'=e^{m-m'}A+\sum e^{S_j-m'}V_j,
 <li>register pressure、shared memory/VMEM bank 与 occupancy。</li>
 </ul>
 <h2 id="3-PagedAttention：虚拟内存管理"><a href="#3-PagedAttention：虚拟内存管理" class="headerlink" title="3. PagedAttention：虚拟内存管理"></a>3. PagedAttention：虚拟内存管理</h2><h3 id="3-1-Block-Table-机制"><a href="#3-1-Block-Table-机制" class="headerlink" title="3.1 Block Table 机制"></a>3.1 Block Table 机制</h3><p>PagedAttention 把 KV Cache 切成固定 token 数的物理块，只在序列增长时按需分配。设 block size 为 <code>B</code>，请求内 token 位置为 <code>t</code>：</p>
-<script type="math/tex; mode=display">
+<div class="math-display">
+\[
 logical\_block=\left\lfloor\frac{t}{B}\right\rfloor,
-\qquad offset=t\bmod B</script><script type="math/tex; mode=display">
-physical\_block=block\_table[request][logical\_block]</script><p>在最简单的单 KV Cache group、单 DCP rank 情况下：</p>
-<script type="math/tex; mode=display">
-slot=physical\_block\times B+offset</script><p><img src="/images/vllm-pagedattention-core/01_address_translation.svg" alt="PagedAttention 地址翻译"></p>
+\qquad offset=t\bmod B
+\]
+</div>
+
+<div class="math-display">
+\[
+physical\_block=block\_table[request][logical\_block]
+\]
+</div>
+
+<p>在最简单的单 KV Cache group、单 DCP rank 情况下：</p>
+<div class="math-display">
+\[
+slot=physical\_block\times B+offset
+\]
+</div>
+
+<p><img src="/images/vllm-pagedattention-core/01_address_translation.svg" alt="PagedAttention 地址翻译"></p>
 <p>图中 <code>B=16</code>、<code>block_table=[7,2,11]</code>。token 20 位于逻辑块 1、块内 offset 4，因此映射到物理块 2 的 offset 4，简化 slot 为 36。物理块 ID 不需要连续。</p>
 <p>vLLM <code>v0.11.0</code> 中，写地址计算位于 <code>BlockTable.compute_slot_mapping</code>：</p>
 <figure class="highlight python"><table><tr><td class="code"><pre><span class="line">block_table_indices = (</span><br><span class="line">    req_indices * max_num_blocks_per_req</span><br><span class="line">    + positions // block_size</span><br><span class="line">)</span><br><span class="line">block_numbers = block_table.ravel()[block_table_indices]</span><br><span class="line">block_offsets = positions % block_size</span><br><span class="line">slot_mapping = block_numbers * block_size + block_offsets</span><br></pre></td></tr></table></figure>
@@ -1935,10 +1975,20 @@ slot=physical\_block\times B+offset</script><p><img src="/images/vllm-pagedatten
 </blockquote>
 <figure class="highlight cpp"><table><tr><td class="code"><pre><span class="line">paged_attention_v2_reduce_kernel:</span><br><span class="line"></span><br><span class="line">  <span class="comment">// Broadcast the max value to all threads.</span></span><br><span class="line">  max_logit = <span class="built_in">VLLM_SHFL_SYNC</span>(max_logit, <span class="number">0</span>);</span><br><span class="line"></span><br><span class="line">  <span class="comment">// Load rescaled exp sums to shared memory.</span></span><br><span class="line">  <span class="keyword">float</span>* shared_exp_sums =</span><br><span class="line">      <span class="keyword">reinterpret_cast</span>&lt;<span class="keyword">float</span>*&gt;(shared_mem + <span class="built_in"><span class="keyword">sizeof</span></span>(<span class="keyword">float</span>) * num_partitions);</span><br><span class="line">  <span class="keyword">const</span> <span class="keyword">float</span>* exp_sums_ptr = exp_sums +</span><br><span class="line">                              seq_idx * num_heads * max_num_partitions +</span><br><span class="line">                              head_idx * max_num_partitions;</span><br><span class="line">  <span class="keyword">float</span> global_exp_sum = <span class="number">0.0f</span>;</span><br><span class="line">  <span class="keyword">for</span> (<span class="keyword">int</span> i = threadIdx.x; i &lt; num_partitions; i += blockDim.x) &#123;</span><br><span class="line">    <span class="keyword">float</span> l = shared_max_logits[i];</span><br><span class="line">    <span class="keyword">float</span> rescaled_exp_sum = exp_sums_ptr[i] * <span class="built_in">expf</span>(l - max_logit);</span><br><span class="line">    global_exp_sum += rescaled_exp_sum;</span><br><span class="line">    shared_exp_sums[i] = rescaled_exp_sum;</span><br><span class="line">  &#125;</span><br><span class="line">  __syncthreads();</span><br><span class="line">  global_exp_sum = block_sum&lt;NUM_WARPS&gt;(&amp;red_smem[NUM_WARPS], global_exp_sum);</span><br><span class="line">  <span class="keyword">const</span> <span class="keyword">float</span> inv_global_exp_sum = __fdividef(<span class="number">1.0f</span>, global_exp_sum + <span class="number">1e-6</span>f);</span><br><span class="line"></span><br></pre></td></tr></table></figure>
 <p>该片段从最大值广播后的中间位置开始。完整 reduce kernel 会先求所有 partitions 的全局最大值，再把局部指数和缩放到同一基准：</p>
-<script type="math/tex; mode=display">
+<div class="math-display">
+\[
 m=\max_j m_j,
-\qquad L=\sum_j l_j e^{m_j-m}</script><script type="math/tex; mode=display">
-O=\sum_j O_j\frac{l_j e^{m_j-m}}{L}</script><p>最后还会按相同权重合并 <code>tmp_out</code>。这属于跨 partition 的稳定归并，不是 FlashAttention 跨 K/V tile 的完整 online-softmax 流程。</p>
+\qquad L=\sum_j l_j e^{m_j-m}
+\]
+</div>
+
+<div class="math-display">
+\[
+O=\sum_j O_j\frac{l_j e^{m_j-m}}{L}
+\]
+</div>
+
+<p>最后还会按相同权重合并 <code>tmp_out</code>。这属于跨 partition 的稳定归并，不是 FlashAttention 跨 K/V tile 的完整 online-softmax 流程。</p>
 <h3 id="3-3-V1-vs-V2-对比"><a href="#3-3-V1-vs-V2-对比" class="headerlink" title="3.3 V1 vs V2 对比"></a>3.3 V1 vs V2 对比</h3><blockquote>
 <p><strong>V1 Engine</strong> 是 <code>vllm/v1/...</code> 的引擎架构；<strong>PagedAttention V1/V2</strong> 是 custom decode kernel 的两个执行方案，两组名称没有版本对应关系。</p>
 </blockquote>
@@ -1984,8 +2034,13 @@ O=\sum_j O_j\frac{l_j e^{m_j-m}}{L}</script><p>最后还会按相同权重合并
 <p><img src="/images/vllm-pagedattention-core/04_prefix_sharing.svg" alt="Prefix Cache 共享物理块"></p>
 <p>图中共享成立的前提是：相同完整 block 已由较早请求计算并提交。vLLM <code>v0.11.0</code> 在新 block 插入 cache 时不做去重，因此两个请求在同一轮首次生成相同完整 block，并不保证立即指向同一个 physical block；后续请求通过 cache lookup 才可能复用已经缓存的实例。完整边界见 <a href="https://github.com/vllm-project/vllm/blob/v0.11.0/vllm/v1/core/block_pool.py#L30-L39"><code>block_pool.py:L30-L39</code></a>。</p>
 <p>vLLM 为完整 token block 构造链式 hash：</p>
-<script type="math/tex; mode=display">
-H_i=H(H_{i-1},\ token\_ids_i,\ extra\_keys_i)</script><blockquote>
+<div class="math-display">
+\[
+H_i=H(H_{i-1},\ token\_ids_i,\ extra\_keys_i)
+\]
+</div>
+
+<blockquote>
 <p>以下教学片段省略了完整函数签名、类型上下文和函数定义末尾的冒号，不能直接运行；vLLM <code>v0.11.0</code> 的完整实现见 <a href="https://github.com/vllm-project/vllm/blob/v0.11.0/vllm/v1/core/kv_cache_utils.py#L547-L573"><code>kv_cache_utils.py:L547-L573</code></a>。</p>
 </blockquote>
 <figure class="highlight cpp"><table><tr><td class="code"><pre><span class="line"><span class="function">def <span class="title">hash_block_tokens</span><span class="params">()</span></span></span><br><span class="line"><span class="function">    <span class="keyword">if</span> <span class="keyword">not</span> parent_block_hash:</span></span><br><span class="line"><span class="function">        parent_block_hash =</span> NONE_HASH</span><br><span class="line"></span><br><span class="line">    curr_block_token_ids_tuple = <span class="built_in">tuple</span>(curr_block_token_ids)</span><br><span class="line">    <span class="keyword">return</span> <span class="built_in">BlockHash</span>(</span><br><span class="line">        <span class="built_in">hash_function</span>(</span><br><span class="line">            (parent_block_hash, curr_block_token_ids_tuple, extra_keys)))</span><br></pre></td></tr></table></figure>
