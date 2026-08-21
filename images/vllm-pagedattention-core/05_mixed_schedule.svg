@@ -1,0 +1,107 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="650" viewBox="0 0 1200 650" role="img" aria-labelledby="schedule-title schedule-desc">
+  <title id="schedule-title">Chunked Prefill 与 Decode 的混合调度和 ragged batch</title>
+  <desc id="schedule-desc">长请求 P 的 Prefill 被拆到多个 scheduler iterations，同时两个 Decode 请求 D0、D1 每轮继续处理一个 token。选中的一轮调度 token 数为 1、1、4，压平后得到 D0、D1、P0、P1、P2、P3，query start locations 为 0、1、2、6。同一 scheduler 和 model batch 可以由 backend 使用一个变长 kernel，也可以拆成 Prefill 与 Decode kernel；query length 分类不是请求的永久状态。</desc>
+  <defs>
+    <marker id="schedule-meta-arrow" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto">
+      <path d="M0 0L9 4.5 0 9Z" fill="#2563EB"/>
+    </marker>
+    <style>
+      text{font-family:"Noto Sans SC","PingFang SC",system-ui,sans-serif;fill:#0F172A}
+      .title{font-size:28px;font-weight:700}
+      .subtitle{font-size:18px;fill:#475569}
+      .section{font-size:17px;font-weight:700;letter-spacing:.8px;fill:#475569}
+      .label{font-size:18px;font-weight:600}
+      .body{font-size:18px}
+      .note{font-size:17px;fill:#475569}
+      .mono{font-family:"SFMono-Regular",Menlo,Consolas,monospace}
+      .batch{fill:none;stroke:#2563EB;stroke-width:1.7;stroke-dasharray:7 6}
+      .work{fill:#F8FAFC;stroke:#64748B;stroke-width:1.5}
+      .current{fill:#FFFBEB;stroke:#D97706;stroke-width:2}
+      .meta{fill:#EFF6FF;stroke:#2563EB;stroke-width:1.7;stroke-dasharray:7 6}
+      .backend{fill:#F8FAFC;stroke:#94A3B8;stroke-width:1.5}
+      .meta-line{fill:none;stroke:#2563EB;stroke-width:2;stroke-dasharray:7 6;marker-end:url(#schedule-meta-arrow)}
+      .rule{stroke:#CBD5E1;stroke-width:1.2}
+    </style>
+  </defs>
+
+  <rect width="1200" height="650" fill="#FFFFFF"/>
+  <text class="title" x="48" y="44">同一轮可混合不同 Query 长度，kernel 组织仍由 backend 决定</text>
+  <text class="subtitle" x="48" y="76">长 Prompt 分多轮 Prefill；已进入 Decode 的请求不必等待整个 Prompt 完成。</text>
+  <line class="rule" x1="48" y1="96" x2="1152" y2="96"/>
+
+  <text class="section" x="48" y="126">SCHEDULER / MODEL ITERATIONS</text>
+  <text class="note" x="48" y="176">Long P</text>
+  <text class="note" x="48" y="226">Decode D0</text>
+  <text class="note" x="48" y="276">Decode D1</text>
+
+  <g aria-label="五个 scheduler iterations，每列是同一个 scheduler 和 model batch">
+    <text class="label mono" x="238" y="145" text-anchor="middle">t0</text>
+    <rect class="batch" x="158" y="154" width="160" height="144" rx="7"/>
+    <rect class="work" x="172" y="164" width="132" height="34" rx="5"/><text class="note mono" x="238" y="187" text-anchor="middle">Prefill 4</text>
+    <rect class="work" x="172" y="214" width="132" height="34" rx="5"/><text class="note mono" x="238" y="237" text-anchor="middle">Decode 1</text>
+    <rect class="work" x="172" y="264" width="132" height="34" rx="5"/><text class="note mono" x="238" y="287" text-anchor="middle">Decode 1</text>
+
+    <text class="label mono" x="426" y="145" text-anchor="middle">t1</text>
+    <rect class="batch" x="346" y="154" width="160" height="144" rx="7"/>
+    <rect class="work" x="360" y="164" width="132" height="34" rx="5"/><text class="note mono" x="426" y="187" text-anchor="middle">Prefill 4</text>
+    <rect class="work" x="360" y="214" width="132" height="34" rx="5"/><text class="note mono" x="426" y="237" text-anchor="middle">Decode 1</text>
+    <rect class="work" x="360" y="264" width="132" height="34" rx="5"/><text class="note mono" x="426" y="287" text-anchor="middle">Decode 1</text>
+
+    <text class="label mono" x="614" y="145" text-anchor="middle">t2 · selected</text>
+    <rect class="batch" x="534" y="154" width="160" height="144" rx="7" stroke-width="2.5"/>
+    <rect class="current" x="548" y="164" width="132" height="34" rx="5"/><text class="note mono" x="614" y="187" text-anchor="middle" fill="#92400E">Prefill 4</text>
+    <rect class="current" x="548" y="214" width="132" height="34" rx="5"/><text class="note mono" x="614" y="237" text-anchor="middle" fill="#92400E">Decode 1</text>
+    <rect class="current" x="548" y="264" width="132" height="34" rx="5"/><text class="note mono" x="614" y="287" text-anchor="middle" fill="#92400E">Decode 1</text>
+
+    <text class="label mono" x="802" y="145" text-anchor="middle">t3</text>
+    <rect class="batch" x="722" y="154" width="160" height="144" rx="7"/>
+    <rect class="work" x="736" y="164" width="132" height="34" rx="5"/><text class="note mono" x="802" y="187" text-anchor="middle">Prefill 4</text>
+    <rect class="work" x="736" y="214" width="132" height="34" rx="5"/><text class="note mono" x="802" y="237" text-anchor="middle">Decode 1</text>
+    <rect class="work" x="736" y="264" width="132" height="34" rx="5"/><text class="note mono" x="802" y="287" text-anchor="middle">Decode 1</text>
+
+    <text class="label mono" x="990" y="145" text-anchor="middle">t4</text>
+    <rect class="batch" x="910" y="154" width="160" height="144" rx="7"/>
+    <rect class="work" x="924" y="164" width="132" height="34" rx="5"/><text class="note mono" x="990" y="187" text-anchor="middle">Decode 1</text>
+    <rect class="work" x="924" y="214" width="132" height="34" rx="5"/><text class="note mono" x="990" y="237" text-anchor="middle">Decode 1</text>
+    <rect class="work" x="924" y="264" width="132" height="34" rx="5"/><text class="note mono" x="990" y="287" text-anchor="middle">Decode 1</text>
+  </g>
+  <text class="note" x="1090" y="176">Prompt 完成</text>
+
+  <path class="meta-line" d="M614 304V332"/>
+  <text class="section" x="48" y="350">SELECTED t2 · RAGGED QUERY BATCH</text>
+
+  <rect class="meta" x="48" y="370" width="382" height="60" rx="7"/>
+  <text class="body mono" x="239" y="407" text-anchor="middle">num_scheduled_tokens = [1, 1, 4]</text>
+
+  <text class="note" x="486" y="366">一种压平顺序</text>
+  <g aria-label="压平后的六个当前 Query tokens">
+    <rect class="current" x="486" y="378" width="90" height="52" rx="6"/><text class="body mono" x="531" y="411" text-anchor="middle">D0</text>
+    <rect class="current" x="576" y="378" width="90" height="52" rx="6"/><text class="body mono" x="621" y="411" text-anchor="middle">D1</text>
+    <rect class="current" x="666" y="378" width="90" height="52" rx="6"/><text class="body mono" x="711" y="411" text-anchor="middle">P0</text>
+    <rect class="current" x="756" y="378" width="90" height="52" rx="6"/><text class="body mono" x="801" y="411" text-anchor="middle">P1</text>
+    <rect class="current" x="846" y="378" width="90" height="52" rx="6"/><text class="body mono" x="891" y="411" text-anchor="middle">P2</text>
+    <rect class="current" x="936" y="378" width="90" height="52" rx="6"/><text class="body mono" x="981" y="411" text-anchor="middle">P3</text>
+  </g>
+
+  <path d="M486 438V454M576 438V454M666 438V454M1026 438V454" stroke="#2563EB" stroke-width="2" stroke-dasharray="6 5"/>
+  <text class="note mono" x="486" y="476" text-anchor="middle">0</text>
+  <text class="note mono" x="576" y="476" text-anchor="middle">1</text>
+  <text class="note mono" x="666" y="476" text-anchor="middle">2</text>
+  <text class="note mono" x="1026" y="476" text-anchor="middle">6</text>
+  <text class="body mono" x="756" y="502" text-anchor="middle">query_start_loc = [0, 1, 2, 6]</text>
+
+  <line class="rule" x1="48" y1="524" x2="1152" y2="524"/>
+  <text class="section" x="48" y="553">同一 SCHEDULER / MODEL BATCH</text>
+  <path class="meta-line" d="M378 548H390"/>
+  <rect class="backend" x="396" y="532" width="292" height="48" rx="6"/>
+  <text class="note" x="542" y="562" text-anchor="middle">Backend A：一次 varlen kernel</text>
+  <text class="body" x="714" y="562" text-anchor="middle">或</text>
+  <rect class="backend" x="742" y="532" width="366" height="48" rx="6"/>
+  <text class="note" x="925" y="562" text-anchor="middle">Backend B：Prefill / Decode 分别调用 kernel</text>
+
+  <text class="note" x="48" y="615">
+    <tspan class="mono">q_len &lt;= decode_threshold</tspan>
+    <tspan> 只分类本轮计算形态；阈值由 backend 配置，不是请求的永久状态。</tspan>
+  </text>
+  <text class="note" x="48" y="642">蓝色虚线框表示调度/地址元数据；琥珀色只标出被展开的当前轮 token。</text>
+</svg>

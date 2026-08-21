@@ -1,0 +1,133 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="660" viewBox="0 0 1200 660" role="img" aria-labelledby="partition-title partition-desc">
+  <title id="partition-title">Custom PagedAttention V1 与 V2 的计算分区和 CTA 映射</title>
+  <desc id="partition-desc">KV storage block 是物理存储单位。vLLM v0.11.0 的 custom paged decode V1 由一个 CTA 处理一个 sequence 和 query head 的完整上下文；V2 把上下文拆成 512 token compute partitions，每个 partition 使用一个 CTA 产生局部最大值、指数和与输出，再由 reduce CTA 稳定合并。Compute partition、storage block 和 CTA 是三个不同概念。</desc>
+  <defs>
+    <marker id="partition-meta-arrow" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto">
+      <path d="M0 0L9 4.5 0 9Z" fill="#2563EB"/>
+    </marker>
+    <marker id="partition-kv-arrow" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto">
+      <path d="M0 0L9 4.5 0 9Z" fill="#0F766E"/>
+    </marker>
+    <style>
+      text{font-family:"Noto Sans SC","PingFang SC",system-ui,sans-serif;fill:#0F172A}
+      .title{font-size:28px;font-weight:700}
+      .subtitle{font-size:18px;fill:#475569}
+      .section{font-size:17px;font-weight:700;letter-spacing:.8px;fill:#475569}
+      .label{font-size:18px;font-weight:600}
+      .body{font-size:18px}
+      .note{font-size:17px;fill:#475569}
+      .mono{font-family:"SFMono-Regular",Menlo,Consolas,monospace}
+      .storage{fill:#ECFDF5;stroke:#0F766E;stroke-width:1.8}
+      .partition{fill:#EFF6FF;stroke:#2563EB;stroke-width:1.7;stroke-dasharray:7 6}
+      .cta{fill:#F8FAFC;stroke:#64748B;stroke-width:1.6}
+      .meta{fill:#EFF6FF;stroke:#2563EB;stroke-width:1.7;stroke-dasharray:7 6}
+      .output{fill:#ECFDF5;stroke:#0F766E;stroke-width:1.8}
+      .meta-line{fill:none;stroke:#2563EB;stroke-width:2;stroke-dasharray:7 6;marker-end:url(#partition-meta-arrow)}
+      .kv-line{fill:none;stroke:#0F766E;stroke-width:2.4;marker-end:url(#partition-kv-arrow)}
+      .rule{stroke:#CBD5E1;stroke-width:1.2}
+    </style>
+  </defs>
+
+  <rect width="1200" height="660" fill="#FFFFFF"/>
+  <text class="title" x="48" y="44">V1/V2 改变计算分区与 CTA 映射，不改变 KV 存储块</text>
+  <text class="subtitle" x="48" y="76">以下仅描述 vLLM v0.11.0 的 custom paged decode kernel。</text>
+  <line class="rule" x1="48" y1="96" x2="1152" y2="96"/>
+
+  <text class="section" x="48" y="124">三个不同层次</text>
+  <rect class="storage" x="190" y="106" width="170" height="42" rx="6"/>
+  <text class="note" x="275" y="133" text-anchor="middle">KV storage block</text>
+  <rect class="partition" x="410" y="106" width="220" height="42" rx="6"/>
+  <text class="note" x="520" y="133" text-anchor="middle">compute partition</text>
+  <rect class="cta" x="680" y="106" width="210" height="42" rx="6"/>
+  <text class="note" x="785" y="133" text-anchor="middle">CUDA thread block / CTA</text>
+
+  <text class="section" x="48" y="182">PHYSICAL KV STORAGE</text>
+  <rect class="meta" x="48" y="196" width="180" height="48" rx="6"/>
+  <text class="body mono" x="138" y="226" text-anchor="middle">block_table</text>
+  <path class="meta-line" d="M228 220H274"/>
+  <g aria-label="物理上可离散分布的 KV storage blocks">
+    <rect class="storage" x="280" y="196" width="84" height="48" rx="6"/><text class="body mono" x="322" y="226" text-anchor="middle">P7</text>
+    <rect class="storage" x="376" y="196" width="84" height="48" rx="6"/><text class="body mono" x="418" y="226" text-anchor="middle">P2</text>
+    <rect class="storage" x="472" y="196" width="84" height="48" rx="6"/><text class="body mono" x="514" y="226" text-anchor="middle">P11</text>
+    <rect class="storage" x="568" y="196" width="84" height="48" rx="6"/><text class="body mono" x="610" y="226" text-anchor="middle">P5</text>
+    <rect class="storage" x="664" y="196" width="84" height="48" rx="6"/><text class="body mono" x="706" y="226" text-anchor="middle">P9</text>
+    <rect class="storage" x="760" y="196" width="84" height="48" rx="6"/><text class="body mono" x="802" y="226" text-anchor="middle">P4</text>
+    <rect class="storage" x="856" y="196" width="84" height="48" rx="6"/><text class="body mono" x="898" y="226" text-anchor="middle">P13</text>
+    <text class="body" x="972" y="226">…</text>
+  </g>
+  <text class="note" x="1004" y="226">固定大小、按地址寻址</text>
+
+  <path class="kv-line" d="M610 244V270H300V288"/>
+  <path class="kv-line" d="M610 270H890V288"/>
+
+  <line class="rule" x1="600" y1="278" x2="600" y2="606"/>
+
+  <text class="section" x="48" y="310">V1 · 一个 CTA 处理完整上下文</text>
+  <rect class="partition" x="68" y="328" width="504" height="196" rx="7"/>
+  <text class="label" x="92" y="359">compute range = complete context</text>
+  <text class="note mono" x="92" y="386">PARTITION_SIZE = 0</text>
+  <text class="note" x="92" y="409">一个 CTA 读取该 sequence/head 的全部 KV blocks</text>
+
+  <g aria-label="V1 读取的 storage blocks">
+    <rect class="storage" x="94" y="430" width="52" height="32" rx="4"/>
+    <rect class="storage" x="154" y="430" width="52" height="32" rx="4"/>
+    <rect class="storage" x="214" y="430" width="52" height="32" rx="4"/>
+    <rect class="storage" x="274" y="430" width="52" height="32" rx="4"/>
+    <rect class="storage" x="334" y="430" width="52" height="32" rx="4"/>
+    <text class="body" x="404" y="454">…</text>
+  </g>
+  <path class="kv-line" d="M430 446H446"/>
+  <rect class="cta" x="452" y="416" width="100" height="64" rx="6"/>
+  <text class="note mono" x="502" y="441" text-anchor="middle">CTA</text>
+  <text class="note mono" x="502" y="465" text-anchor="middle">(seq,h)</text>
+  <path class="kv-line" d="M502 480V484"/>
+  <rect class="output" x="466" y="488" width="72" height="28" rx="5"/>
+  <text class="note mono" x="502" y="508" text-anchor="middle">output O</text>
+  <text class="note" x="68" y="552">不需要跨 partition reduce；长上下文时可用 CTA 数可能不足。</text>
+
+  <text class="section" x="628" y="310">V2 · 512-token partitions 并行后稳定归并</text>
+  <g aria-label="V2 的三个 compute partitions 和对应 CTA">
+    <rect class="partition" x="628" y="328" width="164" height="170" rx="7"/>
+    <text class="label mono" x="710" y="358" text-anchor="middle">P0</text>
+    <text class="note" x="710" y="384" text-anchor="middle">token 0–511</text>
+    <rect class="storage" x="650" y="401" width="36" height="28" rx="3"/>
+    <rect class="storage" x="692" y="401" width="36" height="28" rx="3"/>
+    <rect class="storage" x="734" y="401" width="36" height="28" rx="3"/>
+    <rect class="cta" x="650" y="444" width="120" height="38" rx="5"/>
+    <text class="note mono" x="710" y="469" text-anchor="middle">CTA(seq,h,P0)</text>
+
+    <rect class="partition" x="806" y="328" width="164" height="170" rx="7"/>
+    <text class="label mono" x="888" y="358" text-anchor="middle">P1</text>
+    <text class="note" x="888" y="384" text-anchor="middle">token 512–1023</text>
+    <rect class="storage" x="828" y="401" width="36" height="28" rx="3"/>
+    <rect class="storage" x="870" y="401" width="36" height="28" rx="3"/>
+    <rect class="storage" x="912" y="401" width="36" height="28" rx="3"/>
+    <rect class="cta" x="828" y="444" width="120" height="38" rx="5"/>
+    <text class="note mono" x="888" y="469" text-anchor="middle">CTA(seq,h,P1)</text>
+
+    <rect class="partition" x="984" y="328" width="164" height="170" rx="7"/>
+    <text class="label mono" x="1066" y="358" text-anchor="middle">P2</text>
+    <text class="note" x="1066" y="384" text-anchor="middle">token 1024–…</text>
+    <rect class="storage" x="1006" y="401" width="36" height="28" rx="3"/>
+    <rect class="storage" x="1048" y="401" width="36" height="28" rx="3"/>
+    <rect class="storage" x="1090" y="401" width="36" height="28" rx="3"/>
+    <rect class="cta" x="1006" y="444" width="120" height="38" rx="5"/>
+    <text class="note mono" x="1066" y="469" text-anchor="middle">CTA(seq,h,P2)</text>
+  </g>
+
+  <text class="note mono" x="710" y="526" text-anchor="middle">(m₀,l₀,O₀)</text>
+  <text class="note mono" x="888" y="526" text-anchor="middle">(m₁,l₁,O₁)</text>
+  <text class="note mono" x="1066" y="526" text-anchor="middle">(m₂,l₂,O₂)</text>
+  <path class="kv-line" d="M710 534V542H830V544"/>
+  <path class="kv-line" d="M888 534V544"/>
+  <path class="kv-line" d="M1066 534V542H950V544"/>
+  <rect class="cta" x="790" y="550" width="200" height="54" rx="6"/>
+  <text class="note mono" x="890" y="573" text-anchor="middle">reduce CTA(seq,h)</text>
+  <text class="note" x="890" y="595" text-anchor="middle">stable rescale + merge</text>
+  <path class="kv-line" d="M990 577H1024"/>
+  <rect class="output" x="1030" y="550" width="100" height="54" rx="6"/>
+  <text class="note mono" x="1080" y="583" text-anchor="middle">output O</text>
+
+  <line class="rule" x1="48" y1="620" x2="1152" y2="620"/>
+  <text class="note" x="48" y="650">Compute partition 可跨多个 storage block；CTA 是执行单元。实际 backend 未必走这条 custom kernel。</text>
+</svg>

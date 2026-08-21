@@ -1,0 +1,1163 @@
+<!DOCTYPE html>
+<html lang="zh-Hans">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 5.4.2">
+
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+<link rel="stylesheet" href="https://fonts.loli.net/css?family=Noto+Serif+SC:300,300italic,400,400italic,700,700italic%7CRoboto+Slab:300,300italic,400,400italic,700,700italic%7CPT+Mono:300,300italic,400,400italic,700,700italic&display=swap&subset=latin,latin-ext">
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@5.15.3/css/all.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/animate.css@3.1.1/animate.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fancyapps/fancybox@3.5.7/dist/jquery.fancybox.min.css">
+
+<script class="next-config" data-name="main" type="application/json">{&quot;hostname&quot;:&quot;wazhb.com&quot;,&quot;root&quot;:&quot;&#x2F;&quot;,&quot;images&quot;:&quot;&#x2F;images&quot;,&quot;scheme&quot;:&quot;Gemini&quot;,&quot;version&quot;:&quot;8.3.0&quot;,&quot;exturl&quot;:false,&quot;sidebar&quot;:{&quot;position&quot;:&quot;left&quot;,&quot;display&quot;:&quot;always&quot;,&quot;padding&quot;:18,&quot;offset&quot;:12},&quot;copycode&quot;:false,&quot;bookmark&quot;:{&quot;enable&quot;:false,&quot;color&quot;:&quot;#222&quot;,&quot;save&quot;:&quot;auto&quot;},&quot;fancybox&quot;:true,&quot;mediumzoom&quot;:false,&quot;lazyload&quot;:false,&quot;pangu&quot;:false,&quot;comments&quot;:{&quot;style&quot;:&quot;tabs&quot;,&quot;active&quot;:null,&quot;storage&quot;:true,&quot;lazyload&quot;:false,&quot;nav&quot;:null},&quot;motion&quot;:{&quot;enable&quot;:true,&quot;async&quot;:false,&quot;transition&quot;:{&quot;post_block&quot;:&quot;fadeIn&quot;,&quot;post_header&quot;:&quot;fadeInDown&quot;,&quot;post_body&quot;:&quot;fadeInDown&quot;,&quot;coll_header&quot;:&quot;fadeInLeft&quot;,&quot;sidebar&quot;:&quot;fadeInUp&quot;}},&quot;prism&quot;:false,&quot;i18n&quot;:{&quot;placeholder&quot;:&quot;Searching...&quot;,&quot;empty&quot;:&quot;We didn&#39;t find any results for the search: ${query}&quot;,&quot;hits_time&quot;:&quot;${hits} results found in ${time} ms&quot;,&quot;hits&quot;:&quot;${hits} results found&quot;},&quot;path&quot;:&quot;&#x2F;search.xml&quot;,&quot;localsearch&quot;:{&quot;enable&quot;:true,&quot;trigger&quot;:&quot;auto&quot;,&quot;top_n_per_article&quot;:1,&quot;unescape&quot;:false,&quot;preload&quot;:false}}</script>
+<meta name="description" content="从 Attention 的 IO 瓶颈出发，沿 vLLM v0.11.0 源码解释 PagedAttention、Prefix Caching、Chunked Prefill 与 Sampling。">
+<meta property="og:type" content="article">
+<meta property="og:title" content="vLLM 深度解析（二）：PagedAttention 核心机制">
+<meta property="og:url" content="http://wazhb.com/2026/08/21/20260821-vllm-pagedattention-core/index.html">
+<meta property="og:site_name" content="zzz の Blogs">
+<meta property="og:description" content="从 Attention 的 IO 瓶颈出发，沿 vLLM v0.11.0 源码解释 PagedAttention、Prefix Caching、Chunked Prefill 与 Sampling。">
+<meta property="og:locale">
+<meta property="og:image" content="http://wazhb.com/images/vllm-pagedattention-core/01_flashattention_tile_flow.svg">
+<meta property="og:image" content="http://wazhb.com/images/vllm-pagedattention-core/01_address_translation.svg">
+<meta property="og:image" content="http://wazhb.com/images/vllm-pagedattention-core/02_runtime_loop.svg">
+<meta property="og:image" content="http://wazhb.com/images/vllm-pagedattention-core/03_v1_v2_partitions.svg">
+<meta property="og:image" content="http://wazhb.com/images/vllm-pagedattention-core/04_prefix_sharing.svg">
+<meta property="og:image" content="http://wazhb.com/images/vllm-pagedattention-core/03_prefix_cache_off.png">
+<meta property="og:image" content="http://wazhb.com/images/vllm-pagedattention-core/04_prefix_cache_on.png">
+<meta property="og:image" content="http://wazhb.com/images/vllm-pagedattention-core/05_mixed_schedule.svg">
+<meta property="og:image" content="http://wazhb.com/images/vllm-pagedattention-core/05_chunked_prefill_latency.png">
+<meta property="og:image" content="http://wazhb.com/images/vllm-pagedattention-core/06_sampling_methods.png">
+<meta property="og:image" content="http://wazhb.com/images/vllm-pagedattention-core/07_long_context_combo.png">
+<meta property="article:published_time" content="2026-08-20T16:00:00.000Z">
+<meta property="article:modified_time" content="2026-08-21T06:48:29.279Z">
+<meta property="article:author" content="zzz">
+<meta property="article:tag" content="vLLM">
+<meta property="article:tag" content="PagedAttention">
+<meta property="article:tag" content="FlashAttention">
+<meta property="article:tag" content="Prefix Caching">
+<meta property="article:tag" content="Chunked Prefill">
+<meta property="article:tag" content="Sampling">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="http://wazhb.com/images/vllm-pagedattention-core/01_flashattention_tile_flow.svg">
+
+
+<link rel="canonical" href="http://wazhb.com/2026/08/21/20260821-vllm-pagedattention-core/">
+
+
+
+<script class="next-config" data-name="page" type="application/json">{&quot;sidebar&quot;:&quot;&quot;,&quot;isHome&quot;:false,&quot;isPost&quot;:true,&quot;lang&quot;:&quot;zh-Hans&quot;,&quot;comments&quot;:true,&quot;permalink&quot;:&quot;http:&#x2F;&#x2F;wazhb.com&#x2F;2026&#x2F;08&#x2F;21&#x2F;20260821-vllm-pagedattention-core&#x2F;&quot;,&quot;path&quot;:&quot;2026&#x2F;08&#x2F;21&#x2F;20260821-vllm-pagedattention-core&#x2F;&quot;,&quot;title&quot;:&quot;vLLM 深度解析（二）：PagedAttention 核心机制&quot;}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">&quot;&quot;</script>
+<title>vLLM 深度解析（二）：PagedAttention 核心机制 | zzz の Blogs</title><script src="/js/config.js"></script>
+  
+
+
+
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+<link rel="alternate" href="/atom.xml" title="zzz の Blogs" type="application/atom+xml">
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="Toggle navigation bar" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <h1 class="site-title">zzz の Blogs</h1>
+      <i class="logo-line"></i>
+    </a>
+      <p class="site-subtitle" itemprop="description">尝试写博客の小白</p>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu">
+        <li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>Home</a></li>
+        <li class="menu-item menu-item-about"><a href="/about/" rel="section"><i class="fa fa-user fa-fw"></i>About</a></li>
+        <li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>Tags<span class="badge">25</span></a></li>
+        <li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>Categories<span class="badge">10</span></a></li>
+        <li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>Archives<span class="badge">12</span></a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>Search
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup"><div class="search-header">
+  <span class="search-icon">
+    <i class="fa fa-search"></i>
+  </span>
+  <div class="search-input-container">
+    <input autocomplete="off" autocapitalize="off" maxlength="80"
+           placeholder="Searching..." spellcheck="false"
+           type="search" class="search-input">
+  </div>
+  <span class="popup-btn-close" role="button">
+    <i class="fa fa-times-circle"></i>
+  </span>
+</div>
+<div class="search-result-container no-result">
+  <div class="search-result-icon">
+    <i class="fa fa-spinner fa-pulse fa-5x"></i>
+  </div>
+</div>
+
+    </div>
+  </div>
+
+</div>
+        
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          Table of Contents
+        </li>
+        <li class="sidebar-nav-overview">
+          Overview
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#vLLM-%E6%B7%B1%E5%BA%A6%E8%A7%A3%E6%9E%90%EF%BC%88%E4%BA%8C%EF%BC%89%EF%BC%9APagedAttention-%E6%A0%B8%E5%BF%83%E6%9C%BA%E5%88%B6"><span class="nav-number">1.</span> <span class="nav-text">vLLM 深度解析（二）：PagedAttention 核心机制</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#1-%E5%BC%95%E8%A8%80"><span class="nav-number">1.1.</span> <span class="nav-text">1. 引言</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#2-FlashAttention%EF%BC%9A%E7%90%86%E8%A7%A3%E5%9F%BA%E7%A1%80"><span class="nav-number">1.2.</span> <span class="nav-text">2. FlashAttention：理解基础</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#2-1-%E4%B8%BA%E4%BB%80%E4%B9%88%E9%9C%80%E8%A6%81-FlashAttention%EF%BC%9F"><span class="nav-number">1.2.1.</span> <span class="nav-text">2.1 为什么需要 FlashAttention？</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#2-2-Online-Softmax-%E7%AE%97%E6%B3%95"><span class="nav-number">1.2.2.</span> <span class="nav-text">2.2 Online Softmax 算法</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#3-PagedAttention%EF%BC%9A%E8%99%9A%E6%8B%9F%E5%86%85%E5%AD%98%E7%AE%A1%E7%90%86"><span class="nav-number">1.3.</span> <span class="nav-text">3. PagedAttention：虚拟内存管理</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#3-1-Block-Table-%E6%9C%BA%E5%88%B6"><span class="nav-number">1.3.1.</span> <span class="nav-text">3.1 Block Table 机制</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#3-2-CUDA-Kernel-%E5%AE%9E%E7%8E%B0%E7%BB%86%E8%8A%82"><span class="nav-number">1.3.2.</span> <span class="nav-text">3.2 CUDA Kernel 实现细节</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#3-2-1-Q%E3%80%81K-V-Cache-%E7%9A%84%E7%89%A9%E7%90%86%E5%B8%83%E5%B1%80"><span class="nav-number">1.3.2.1.</span> <span class="nav-text">3.2.1 Q、K&#x2F;V Cache 的物理布局</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#3-2-2-%E5%8D%8F%E4%BD%9C%E5%8A%A0%E8%BD%BD-Query"><span class="nav-number">1.3.2.2.</span> <span class="nav-text">3.2.2 协作加载 Query</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#3-2-3-%E5%AE%9A%E4%BD%8D-Block-Table"><span class="nav-number">1.3.2.3.</span> <span class="nav-text">3.2.3 定位 Block Table</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#3-2-4-%E5%88%86%E9%A1%B5%E8%AF%BB%E5%8F%96-K-%E5%B9%B6%E8%AE%A1%E7%AE%97-QK"><span class="nav-number">1.3.2.4.</span> <span class="nav-text">3.2.4 分页读取 K 并计算 QK</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#3-2-5-Max-Reduction"><span class="nav-number">1.3.2.5.</span> <span class="nav-text">3.2.5 Max Reduction</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#3-2-6-%E7%A8%B3%E5%AE%9A-Softmax"><span class="nav-number">1.3.2.6.</span> <span class="nav-text">3.2.6 稳定 Softmax</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#3-2-7-%E4%BF%9D%E5%AD%98-V2-Partition-%E7%BB%9F%E8%AE%A1%E9%87%8F"><span class="nav-number">1.3.2.7.</span> <span class="nav-text">3.2.7 保存 V2 Partition 统计量</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#3-2-8-%E8%AF%BB%E5%8F%96-V-%E5%B9%B6%E7%B4%AF%E5%8A%A0%E8%BE%93%E5%87%BA"><span class="nav-number">1.3.2.8.</span> <span class="nav-text">3.2.8 读取 V 并累加输出</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#3-2-9-V2-%E8%B7%A8-Partition-%E5%BD%92%E5%B9%B6"><span class="nav-number">1.3.2.9.</span> <span class="nav-text">3.2.9 V2 跨 Partition 归并</span></a></li></ol></li><li class="nav-item nav-level-3"><a class="nav-link" href="#3-3-V1-vs-V2-%E5%AF%B9%E6%AF%94"><span class="nav-number">1.3.3.</span> <span class="nav-text">3.3 V1 vs V2 对比</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#4-Prefix-Caching%EF%BC%9A%E5%87%8F%E5%B0%91%E9%87%8D%E5%A4%8D%E8%AE%A1%E7%AE%97"><span class="nav-number">1.4.</span> <span class="nav-text">4. Prefix Caching：减少重复计算</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#4-1-%E6%A0%B8%E5%BF%83%E6%9C%BA%E5%88%B6"><span class="nav-number">1.4.1.</span> <span class="nav-text">4.1 核心机制</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#4-2-%E5%AE%9E%E6%B5%8B%E6%95%B0%E6%8D%AE%EF%BC%88%E6%8E%A2%E7%B4%A2%E6%80%A7%E8%A7%82%E6%B5%8B%EF%BC%89"><span class="nav-number">1.4.2.</span> <span class="nav-text">4.2 实测数据（探索性观测）</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#4-3-%E9%80%82%E7%94%A8%E5%9C%BA%E6%99%AF"><span class="nav-number">1.4.3.</span> <span class="nav-text">4.3 适用场景</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#5-Chunked-Prefill%EF%BC%9A%E6%B7%B7%E5%90%88%E8%B0%83%E5%BA%A6"><span class="nav-number">1.5.</span> <span class="nav-text">5. Chunked Prefill：混合调度</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#5-1-%E9%97%AE%E9%A2%98%EF%BC%9A%E9%95%BF-Prompt-%E7%9A%84%E9%A5%A5%E9%A5%BF"><span class="nav-number">1.5.1.</span> <span class="nav-text">5.1 问题：长 Prompt 的饥饿</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#5-2-Chunked-Prefill-%E6%96%B9%E6%A1%88"><span class="nav-number">1.5.2.</span> <span class="nav-text">5.2 Chunked Prefill 方案</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#5-3-%E5%AE%9E%E6%B5%8B%E6%95%88%E6%9E%9C%EF%BC%88%E6%8E%A2%E7%B4%A2%E6%80%A7%E8%A7%82%E6%B5%8B%EF%BC%89"><span class="nav-number">1.5.3.</span> <span class="nav-text">5.3 实测效果（探索性观测）</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#6-Sampling%EF%BC%9A%E4%BB%8E-Logits-%E5%88%B0-Token"><span class="nav-number">1.6.</span> <span class="nav-text">6. Sampling：从 Logits 到 Token</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#6-1-%E5%B8%B8%E8%A7%81%E9%87%87%E6%A0%B7%E6%96%B9%E6%B3%95"><span class="nav-number">1.6.1.</span> <span class="nav-text">6.1 常见采样方法</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#6-2-%E6%80%A7%E8%83%BD%E5%BD%B1%E5%93%8D"><span class="nav-number">1.6.2.</span> <span class="nav-text">6.2 性能影响</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#7-%E9%95%BF%E4%B8%8A%E4%B8%8B%E6%96%87%E7%BB%BC%E5%90%88%E4%BC%98%E5%8C%96"><span class="nav-number">1.7.</span> <span class="nav-text">7. 长上下文综合优化</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#7-1-32K-Tokens-%E5%9C%BA%E6%99%AF"><span class="nav-number">1.7.1.</span> <span class="nav-text">7.1 32K Tokens 场景</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#7-2-%E4%BC%98%E5%8C%96%E7%BB%84%E5%90%88%E6%95%88%E6%9E%9C%EF%BC%88%E6%8E%A2%E7%B4%A2%E6%80%A7%E8%A7%82%E6%B5%8B%EF%BC%89"><span class="nav-number">1.7.2.</span> <span class="nav-text">7.2 优化组合效果（探索性观测）</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#7-3-%E6%9C%80%E4%BD%B3%E5%AE%9E%E8%B7%B5"><span class="nav-number">1.7.3.</span> <span class="nav-text">7.3 最佳实践</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%8F%82%E8%80%83%E8%B5%84%E6%96%99"><span class="nav-number">1.8.</span> <span class="nav-text">参考资料</span></a></li></ol></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author site-overview-item animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="zzz"
+      src="/images/yan.jpg">
+  <p class="site-author-name" itemprop="name">zzz</p>
+  <div class="site-description" itemprop="description">回首向来萧瑟处<br>归去，也无风雨也无晴。</div>
+</div>
+<div class="site-state-wrap site-overview-item animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">12</span>
+          <span class="site-state-item-name">posts</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">10</span>
+        <span class="site-state-item-name">categories</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">25</span>
+        <span class="site-state-item-name">tags</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author site-overview-item animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/mXIAoZ" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;mXIAoZ" rel="noopener" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:14751725611@163.com" title="E-Mail → mailto:14751725611@163.com" rel="noopener" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+  <div class="cc-license site-overview-item animated" itemprop="license">
+    <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/deed.zh" class="cc-opacity" rel="noopener" target="_blank"><img src="/images/cc-by-nc-sa.svg" alt="Creative Commons"></a>
+  </div>
+
+
+
+        </div>
+      </div>
+    </div>
+  </aside>
+  <div class="sidebar-dimmer"></div>
+
+
+    </header>
+
+    
+  <div class="back-to-top" role="button" aria-label="Back to top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+  <div class="reading-progress-bar"></div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-Hans">
+    <link itemprop="mainEntityOfPage" href="http://wazhb.com/2026/08/21/20260821-vllm-pagedattention-core/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/yan.jpg">
+      <meta itemprop="name" content="zzz">
+      <meta itemprop="description" content="回首向来萧瑟处<br>归去，也无风雨也无晴。">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="zzz の Blogs">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          vLLM 深度解析（二）：PagedAttention 核心机制
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">Posted on</span>
+      
+
+      <time title="Created: 2026-08-21 00:00:00 / Modified: 14:48:29" itemprop="dateCreated datePublished" datetime="2026-08-21T00:00:00+08:00">2026-08-21</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">In</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/AI-Infra/" itemprop="url" rel="index"><span itemprop="name">AI Infra</span></a>
+        </span>
+          , 
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/AI-Infra/vLLM/" itemprop="url" rel="index"><span itemprop="name">vLLM</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-item" title="Views" id="busuanzi_container_page_pv">
+      <span class="post-meta-item-icon">
+        <i class="far fa-eye"></i>
+      </span>
+      <span class="post-meta-item-text">Views: </span>
+      <span id="busuanzi_value_page_pv"></span>
+    </span>
+</div>
+
+            <div class="post-description">从 Attention 的 IO 瓶颈出发，沿 vLLM v0.11.0 源码解释 PagedAttention、Prefix Caching、Chunked Prefill 与 Sampling。</div>
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+        <h1 id="vLLM-深度解析（二）：PagedAttention-核心机制"><a href="#vLLM-深度解析（二）：PagedAttention-核心机制" class="headerlink" title="vLLM 深度解析（二）：PagedAttention 核心机制"></a>vLLM 深度解析（二）：PagedAttention 核心机制</h1><h2 id="1-引言"><a href="#1-引言" class="headerlink" title="1. 引言"></a>1. 引言</h2><p>vLLM 的核心贡献之一，是把操作系统分页思想引入 KV Cache 管理：模型仍然看到逻辑连续的 token 序列，但这些 token 的 K/V 可以分散存放在不同物理块中，再由 <code>block_table</code> 恢复逻辑顺序。这套机制降低了连续预留造成的浪费，也为公共前缀共享和长 Prompt 分段执行提供了统一的地址基础。</p>
+<span id="more"></span>
+<p>自回归生成每前进一步，都要读取历史 token 的 K/V，并把当前 token 的 K/V 追加到缓存。忽略量化、对齐和并行切分后，每个 token 的 KV Cache 大小近似为：</p>
+<script type="math/tex; mode=display">
+\text{KV bytes/token}
+=2\times N_{layers}\times N_{kv\_heads}\times d_{head}
+\times \text{bytes(dtype)}</script><p>例如，32 层、8 个 KV heads、<code>head_dim=128</code>、BF16 时，每个 token 约占 128 KiB；单个 32K 上下文约占 4 GiB。这个数值只对应上述模型形状，不能直接推广到其他模型。</p>
+<p>若为每个请求预留一段最大长度的连续空间，会同时出现三类问题：</p>
+<ul>
+<li><strong>过度预留</strong>：多数请求不会生成到长度上限；</li>
+<li><strong>外部碎片</strong>：长短请求交错结束后，留下难以复用的连续空洞；</li>
+<li><strong>增长与共享困难</strong>：输出长度未知，连续扩容昂贵，相同前缀也难以自然共享同一份 KV。</li>
+</ul>
+<p>PagedAttention 解决的是 KV 的<strong>存储、寻址和生命周期</strong>；FlashAttention 解决的是 Attention 计算过程的<strong>片上分块与 HBM 流量</strong>。二者处在不同抽象层，可以同时使用。本文基于 vLLM <code>v0.11.0</code> 源码，依次讨论：</p>
+<ol>
+<li>FlashAttention 为什么需要 online softmax；</li>
+<li>PagedAttention 如何完成逻辑块到物理块的映射；</li>
+<li>CUDA kernel 如何读取分页 K/V；</li>
+<li>Prefix Caching、Chunked Prefill 如何复用这套地址机制；</li>
+<li>Attention 结束后，不同 Sampling 策略如何影响性能。</li>
+</ol>
+<blockquote>
+<p>backend 选择、CUDA Graph 支持和 PagedAttention V1/V2 启发式都可能随版本变化。本文的源码路径与条件均限定在 vLLM <code>v0.11.0</code>。</p>
+</blockquote>
+<h2 id="2-FlashAttention：理解基础"><a href="#2-FlashAttention：理解基础" class="headerlink" title="2. FlashAttention：理解基础"></a>2. FlashAttention：理解基础</h2><h3 id="2-1-为什么需要-FlashAttention？"><a href="#2-1-为什么需要-FlashAttention？" class="headerlink" title="2.1 为什么需要 FlashAttention？"></a>2.1 为什么需要 FlashAttention？</h3><p>多 token self-attention，特别是 Prefill，通常写成：</p>
+<script type="math/tex; mode=display">
+S=QK^T,\qquad P=\operatorname{softmax}(S),\qquad O=PV</script><p>如果先完整计算 <code>S</code>、写回 HBM，再读出计算 <code>P</code>；随后再次写回、读出 <code>P</code> 计算 <code>O</code>，两个 $n\times n$ 中间矩阵会产生大量 HBM 流量，临时显存也随序列长度按 $O(n^2)$ 增长。</p>
+<p>这里必须区分 Prefill 与单 token Decode：Prefill 有多行 Query，完整 score 矩阵可能很大；Decode 通常只有一行 Query，单步 score 和 KV 读取随当前上下文近似按 $O(n)$ 增长。FlashAttention 的收益大小因此取决于 Query 长度、head size、dtype、GPU 和 kernel 实现，不能用固定倍率概括。</p>
+<p>FlashAttention 的关键不是减少数学运算，而是使用 IO-aware tiling：</p>
+<div class="table-container">
+<table>
+<thead>
+<tr>
+<th>实现</th>
+<th>完整 <code>S/P</code> 是否写入 HBM</th>
+<th>跨 tile 保留的状态</th>
+<th>数学结果</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>直接实现</td>
+<td>是</td>
+<td>完整中间矩阵</td>
+<td>exact attention</td>
+</tr>
+<tr>
+<td>FlashAttention</td>
+<td>否</td>
+<td>每行的 <code>m</code>、<code>l</code> 与输出累加器</td>
+<td>exact attention</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>它可能增加少量重计算，却显著减少大矩阵的 HBM 往返。计算吞吐与数据搬运速度的差距随硬件和 shape 改变，应以 profiler 中的带宽、算力利用率和 kernel 时间判断，而不是套用一个固定数字。</p>
+<h3 id="2-2-Online-Softmax-算法"><a href="#2-2-Online-Softmax-算法" class="headerlink" title="2.2 Online Softmax 算法"></a>2.2 Online Softmax 算法</h3><p>设已经处理过一部分 K/V tiles，并保存状态 $(m,l,A)$：</p>
+<ul>
+<li><code>m</code>：当前行已经见过的最大 score；</li>
+<li><code>l</code>：在最大值基准下的指数和；</li>
+<li><code>A</code>：尚未除以 <code>l</code> 的输出累加器。</li>
+</ul>
+<p>对新的 score tile $S_j$ 和 Value tile $V_j$，稳定合并公式为：</p>
+<script type="math/tex; mode=display">
+m'=\max(m,\max S_j)</script><script type="math/tex; mode=display">
+l'=e^{m-m'}l+\sum e^{S_j-m'}</script><script type="math/tex; mode=display">
+A'=e^{m-m'}A+\sum e^{S_j-m'}V_j,
+\qquad O=A'/l'</script><p>每次更新都先把旧状态缩放到新的最大值基准，因此不会因为 score 很大而直接计算 <code>exp(score)</code>。遍历完全部 K/V tiles 后，得到的结果与普通 softmax 等价。</p>
+<p><img src="/images/vllm-pagedattention-core/01_flashattention_tile_flow.svg" alt="FlashAttention Tile 流程"></p>
+<p>一个常见的逻辑映射是 <code>CTA(request, query_head, query_tile)</code>：一个请求会产生多个 CTA；一个 CTA 只能完整驻留在一个 SM；SM 又会动态执行来自不同请求的 CTA。request、CUDA block 和 SM 不是一一对应关系。</p>
+<p>Tile 结束后，当前 <code>S/P/K/V</code> tile buffer 可以复用，但 HBM 中的 K/V 数据没有被删除。真正跨 tile 存活的是 Query tile 与 <code>(m,l,A)</code>。<code>Br/Bc</code> 还会同时受到以下因素限制：</p>
+<ul>
+<li>Q、K、V、score、输出累加器所需的片上容量；</li>
+<li>FP32 softmax 状态与输出累加器；</li>
+<li>双缓冲、流水线和矩阵指令的对齐要求；</li>
+<li>register pressure、shared memory/VMEM bank 与 occupancy。</li>
+</ul>
+<h2 id="3-PagedAttention：虚拟内存管理"><a href="#3-PagedAttention：虚拟内存管理" class="headerlink" title="3. PagedAttention：虚拟内存管理"></a>3. PagedAttention：虚拟内存管理</h2><h3 id="3-1-Block-Table-机制"><a href="#3-1-Block-Table-机制" class="headerlink" title="3.1 Block Table 机制"></a>3.1 Block Table 机制</h3><p>PagedAttention 把 KV Cache 切成固定 token 数的物理块，只在序列增长时按需分配。设 block size 为 <code>B</code>，请求内 token 位置为 <code>t</code>：</p>
+<script type="math/tex; mode=display">
+logical\_block=\left\lfloor\frac{t}{B}\right\rfloor,
+\qquad offset=t\bmod B</script><script type="math/tex; mode=display">
+physical\_block=block\_table[request][logical\_block]</script><p>在最简单的单 KV Cache group、单 DCP rank 情况下：</p>
+<script type="math/tex; mode=display">
+slot=physical\_block\times B+offset</script><p><img src="/images/vllm-pagedattention-core/01_address_translation.svg" alt="PagedAttention 地址翻译"></p>
+<p>图中 <code>B=16</code>、<code>block_table=[7,2,11]</code>。token 20 位于逻辑块 1、块内 offset 4，因此映射到物理块 2 的 offset 4，简化 slot 为 36。物理块 ID 不需要连续。</p>
+<p>vLLM <code>v0.11.0</code> 中，写地址计算位于 <code>BlockTable.compute_slot_mapping</code>：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">block_table_indices = (</span><br><span class="line">    req_indices * max_num_blocks_per_req</span><br><span class="line">    + positions // block_size</span><br><span class="line">)</span><br><span class="line">block_numbers = block_table.ravel()[block_table_indices]</span><br><span class="line">block_offsets = positions % block_size</span><br><span class="line">slot_mapping = block_numbers * block_size + block_offsets</span><br></pre></td></tr></table></figure>
+<div class="table-container">
+<table>
+<thead>
+<tr>
+<th>元数据</th>
+<th>回答的问题</th>
+<th>粒度</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>block_table</code></td>
+<td>第 <code>i</code> 个逻辑块在哪个物理块？</td>
+<td>按请求维护，随 KV block 分配增长</td>
+</tr>
+<tr>
+<td><code>slot_mapping</code></td>
+<td>本轮新 token 的 K/V 写入哪个 slot？</td>
+<td>按本轮 flattened token batch 构造</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>简化成一句话：<code>slot_mapping</code> 负责写新增 K/V，<code>block_table</code> 负责读历史 K/V。</p>
+<p><img src="/images/vllm-pagedattention-core/02_runtime_loop.svg" alt="单层 Attention 中的 KV 读写契约"></p>
+<p>执行链可以概括为：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">Scheduler.schedule</span><br><span class="line">  → SchedulerOutput.num_scheduled_tokens</span><br><span class="line">  → KVCacheManager.allocate_slots</span><br><span class="line">  → GpuModelRunner._prepare_inputs</span><br><span class="line">  → block_table / slot_mapping / query_start_loc / seq_lens</span><br><span class="line">  → Attention backend</span><br></pre></td></tr></table></figure>
+<p>分页不会消除所有浪费：每个活跃序列的尾块仍可能未填满，Block Table 也需要内存。Block size 是尾块浪费、映射表大小与 kernel 访问效率之间的折中。</p>
+<h3 id="3-2-CUDA-Kernel-实现细节"><a href="#3-2-CUDA-Kernel-实现细节" class="headerlink" title="3.2 CUDA Kernel 实现细节"></a>3.2 CUDA Kernel 实现细节</h3><p>vLLM 可以选择 FlashAttention、FlashInfer、Triton 等 backend；下面分析的是 custom PagedAttention decode kernel。它非常适合观察 Block Table 如何进入 CUDA，但源码中存在这条路径，不代表任意 NVIDIA V1 配置都会默认使用它。</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">PagedAttention.forward_decode</span><br><span class="line">  → vllm._custom_ops.paged_attention_v1 / v2</span><br><span class="line">  → torch.ops._C.paged_attention_v1 / v2</span><br><span class="line">  → csrc/torch_bindings.cpp</span><br><span class="line">  → paged_attention_v1.cu / paged_attention_v2.cu</span><br><span class="line">  → attention_kernels.cuh</span><br></pre></td></tr></table></figure>
+<p>下面的代码按执行链截取，省略模板声明、部分外层循环和 Block Sparse 分支；有些片段从循环中间开始或结束，不能独立编译。每段后的说明负责补足数据布局、线程协作和缺失上下文。</p>
+<h4 id="3-2-1-Q、K-V-Cache-的物理布局"><a href="#3-2-1-Q、K-V-Cache-的物理布局" class="headerlink" title="3.2.1 Q、K/V Cache 的物理布局"></a>3.2.1 Q、K/V Cache 的物理布局</h4><figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">const</span> <span class="keyword">scalar_t</span>* __restrict__ q,       <span class="comment">// [num_seqs, num_heads, head_size]</span></span><br><span class="line">   <span class="keyword">const</span> <span class="keyword">cache_t</span>* __restrict__ k_cache,  <span class="comment">// [num_blocks, num_kv_heads,</span></span><br><span class="line">                                         <span class="comment">// head_size/x, block_size, x]</span></span><br><span class="line">   <span class="keyword">const</span> <span class="keyword">cache_t</span>* __restrict__ v_cache,  <span class="comment">// [num_blocks, num_kv_heads,</span></span><br><span class="line">                                         <span class="comment">// head_size, block_size]</span></span><br></pre></td></tr></table></figure>
+<p>K Cache 形状为 <code>[num_blocks, num_kv_heads, head_size/x, block_size, x]</code>，V Cache 为 <code>[num_blocks, num_kv_heads, head_size, block_size]</code>。其中：</p>
+<ul>
+<li><code>x = 16 / sizeof(cache_t)</code>，K 最内层 <code>x</code> 个元素合计 16 bytes；</li>
+<li>thread group 根据 <code>scalar_t</code> 和 <code>THREAD_GROUP_SIZE</code> 决定计算向量 <code>VEC_SIZE</code>；</li>
+<li><code>offset1/offset2</code> 把计算向量映射到 K Cache 的最内层布局；</li>
+<li>FP8 KV Cache 需要先加载量化向量，再按 scale 转换为计算向量。</li>
+</ul>
+<p>K/V 排布不同来自 kernel 的访问模式：QK 点积更适合按 head dimension 向量化读取 K；<code>P·V</code> 则沿 token 权重累加每个输出维度。</p>
+<h4 id="3-2-2-协作加载-Query"><a href="#3-2-2-协作加载-Query" class="headerlink" title="3.2.2 协作加载 Query"></a>3.2.2 协作加载 Query</h4><figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line">  <span class="keyword">const</span> <span class="keyword">scalar_t</span>* q_ptr = q + seq_idx * q_stride + head_idx * HEAD_SIZE;</span><br><span class="line">  __shared__ Q_vec q_vecs[THREAD_GROUP_SIZE][NUM_VECS_PER_THREAD];</span><br><span class="line"></span><br><span class="line"><span class="meta">#<span class="meta-keyword">pragma</span> unroll</span></span><br><span class="line">  <span class="keyword">for</span> (<span class="keyword">int</span> i = thread_group_idx; i &lt; NUM_VECS_PER_THREAD;</span><br><span class="line">       i += NUM_THREAD_GROUPS) &#123;</span><br><span class="line">    <span class="keyword">const</span> <span class="keyword">int</span> vec_idx = thread_group_offset + i * THREAD_GROUP_SIZE;</span><br><span class="line">    q_vecs[thread_group_offset][i] =</span><br><span class="line">        *<span class="keyword">reinterpret_cast</span>&lt;<span class="keyword">const</span> Q_vec*&gt;(q_ptr + vec_idx * VEC_SIZE);</span><br><span class="line">  &#125;</span><br><span class="line">  __syncthreads();  <span class="comment">// TODO(naed90): possible speedup if this is replaced with a</span></span><br></pre></td></tr></table></figure>
+<p><code>q_ptr</code> 定位 <code>(sequence, query head)</code>。CTA 内多个 thread groups 分工填充同一份 shared <code>q_vecs</code>；组内线程通过 <code>thread_group_offset</code> 加载不同 head-dimension 片段，<code>__syncthreads()</code> 后由整个 CTA 重用。代码末尾停在一个未完整展示的 TODO 注释处，完整同步优化需查看链接源码。</p>
+<h4 id="3-2-3-定位-Block-Table"><a href="#3-2-3-定位-Block-Table" class="headerlink" title="3.2.3 定位 Block Table"></a>3.2.3 定位 Block Table</h4><figure class="highlight angelscript"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">const</span> <span class="built_in">int</span>* block_table = block_tables + seq_idx * max_num_blocks_per_seq;</span><br></pre></td></tr></table></figure>
+<p><code>seq_idx * max_num_blocks_per_seq</code> 选择当前请求的 Block Table 行。逻辑 <code>block_idx</code> 到物理块的读取发生在后续循环：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">const</span> <span class="keyword">int64_t</span> physical_block_number =</span><br><span class="line">    <span class="keyword">static_cast</span>&lt;<span class="keyword">int64_t</span>&gt;(block_table[block_idx]);</span><br></pre></td></tr></table></figure>
+<p>这就是 <code>block_table[request][logical_block] → physical_block</code> 在 CUDA 中的落点。</p>
+<h4 id="3-2-4-分页读取-K-并计算-QK"><a href="#3-2-4-分页读取-K-并计算-QK" class="headerlink" title="3.2.4 分页读取 K 并计算 QK"></a>3.2.4 分页读取 K 并计算 QK</h4><figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br></pre></td><td class="code"><pre><span class="line">      <span class="keyword">for</span> (<span class="keyword">int</span> j = <span class="number">0</span>; j &lt; NUM_VECS_PER_THREAD; j++) &#123;</span><br><span class="line">        <span class="keyword">const</span> <span class="keyword">cache_t</span>* k_ptr =</span><br><span class="line">            k_cache + physical_block_number * kv_block_stride +</span><br><span class="line">            kv_head_idx * kv_head_stride + physical_block_offset * x;</span><br><span class="line">        <span class="keyword">const</span> <span class="keyword">int</span> vec_idx = thread_group_offset + j * THREAD_GROUP_SIZE;</span><br><span class="line">        <span class="keyword">const</span> <span class="keyword">int</span> offset1 = (vec_idx * VEC_SIZE) / x;</span><br><span class="line">        <span class="keyword">const</span> <span class="keyword">int</span> offset2 = (vec_idx * VEC_SIZE) % x;</span><br><span class="line"></span><br><span class="line">        <span class="function"><span class="keyword">if</span> <span class="title">constexpr</span> <span class="params">(KV_DTYPE == Fp8KVCacheDataType::kAuto)</span> </span>&#123;</span><br><span class="line">          k_vecs[j] = *<span class="keyword">reinterpret_cast</span>&lt;<span class="keyword">const</span> K_vec*&gt;(</span><br><span class="line">              k_ptr + offset1 * BLOCK_SIZE * x + offset2);</span><br><span class="line">        &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">          <span class="comment">// Vector conversion from Quant_vec to K_vec.</span></span><br><span class="line">          Quant_vec k_vec_quant = *<span class="keyword">reinterpret_cast</span>&lt;<span class="keyword">const</span> Quant_vec*&gt;(</span><br><span class="line">              k_ptr + offset1 * BLOCK_SIZE * x + offset2);</span><br><span class="line">          k_vecs[j] = fp8::scaled_convert&lt;K_vec, Quant_vec, KV_DTYPE&gt;(</span><br><span class="line">              k_vec_quant, *k_scale);</span><br><span class="line">        &#125;</span><br><span class="line">      &#125;</span><br><span class="line"></span><br><span class="line">      <span class="comment">// Compute dot product.</span></span><br><span class="line">      <span class="comment">// This includes a reduction across the threads in the same thread group.</span></span><br><span class="line">      <span class="keyword">float</span> qk = scale * Qk_dot&lt;<span class="keyword">scalar_t</span>, THREAD_GROUP_SIZE&gt;::<span class="built_in">dot</span>(</span><br><span class="line">                             q_vecs[thread_group_offset], k_vecs);</span><br><span class="line">      <span class="comment">// Add the ALiBi bias if slopes are given.</span></span><br><span class="line">      qk += (alibi_slope != <span class="number">0</span>) ? alibi_slope * (token_idx - seq_len + <span class="number">1</span>) : <span class="number">0</span>;</span><br><span class="line"></span><br><span class="line">      <span class="keyword">if</span> (thread_group_offset == <span class="number">0</span>) &#123;</span><br><span class="line">        <span class="comment">// Store the partial reductions to shared memory.</span></span><br><span class="line">        <span class="comment">// NOTE(woosuk): It is required to zero out the masked logits.</span></span><br><span class="line">        <span class="keyword">const</span> <span class="keyword">bool</span> mask = token_idx &gt;= seq_len;</span><br><span class="line">        logits[token_idx - start_token_idx] = mask ? <span class="number">0.f</span> : qk;</span><br><span class="line">        <span class="comment">// Update the max value.</span></span><br><span class="line">        qk_max = mask ? qk_max : <span class="built_in">fmaxf</span>(qk_max, qk);</span><br><span class="line">      &#125;</span><br><span class="line"></span><br><span class="line">  <span class="comment">// Perform reduction across the threads in the same warp to get the</span></span><br><span class="line">  <span class="comment">// max qk value for each &quot;warp&quot; (not across the thread block yet).</span></span><br><span class="line">  <span class="comment">// The 0-th thread of each thread group already has its max qk value.</span></span><br><span class="line"><span class="meta">#<span class="meta-keyword">pragma</span> unroll</span></span><br></pre></td></tr></table></figure>
+<p>关键步骤是：</p>
+<ol>
+<li><code>physical_block_number</code>、<code>kv_head_idx</code> 和 <code>physical_block_offset</code> 确定 K 的物理地址；</li>
+<li><code>KV_DTYPE == kAuto</code> 时直接加载；其他分支把 FP8 <code>Quant_vec</code> 按 <code>k_scale</code> 转成计算向量；</li>
+<li><code>Qk_dot</code> 在线程组内完成点积归约；</li>
+<li>ALiBi bias 在缩放后的 QK 上累加；</li>
+<li>超出 <code>seq_len</code> 的尾块位置写 0，且不更新最大值。</li>
+</ol>
+<p>片段末尾的 <code>#pragma unroll</code> 属于随后 max reduction 的循环提示。</p>
+<h4 id="3-2-5-Max-Reduction"><a href="#3-2-5-Max-Reduction" class="headerlink" title="3.2.5 Max Reduction"></a>3.2.5 Max Reduction</h4><figure class="highlight reasonml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">  qk_max = lane &lt; NUM_WARPS ? red_smem<span class="literal">[<span class="identifier">lane</span>]</span> : -FLT_MAX;</span><br><span class="line"><span class="comment">// Broadcast the max qk value to all threads.</span></span><br><span class="line">  qk_max = <span class="constructor">VLLM_SHFL_SYNC(<span class="params">qk_max</span>, 0)</span>;</span><br></pre></td></tr></table></figure>
+<p>该片段只展示跨 warp 阶段读取 <code>red_smem</code> 与广播结果。完整流程是：thread group 局部最大值 → warp 内 shuffle reduction → warp leader 写 shared memory → 跨 warp reduction → 广播 block-wide <code>qk_max</code>。V1 的处理范围是完整序列，V2 是当前 partition。</p>
+<h4 id="3-2-6-稳定-Softmax"><a href="#3-2-6-稳定-Softmax" class="headerlink" title="3.2.6 稳定 Softmax"></a>3.2.6 稳定 Softmax</h4><figure class="highlight angelscript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// Get the sum of the exp values.</span></span><br><span class="line"><span class="built_in">float</span> exp_sum = <span class="number">0.f</span>;</span><br><span class="line"><span class="keyword">for</span> (<span class="built_in">int</span> i = thread_idx; i &lt; num_tokens; i += NUM_THREADS) &#123;</span><br><span class="line">  <span class="built_in">float</span> val = __expf(logits[i] - qk_max);</span><br><span class="line">  logits[i] = val;</span><br><span class="line">  exp_sum += val;</span><br><span class="line">&#125;</span><br><span class="line">exp_sum = block_sum&lt;NUM_WARPS&gt;(&amp;red_smem[NUM_WARPS], exp_sum);</span><br><span class="line"></span><br><span class="line"><span class="comment">// Compute softmax.</span></span><br><span class="line"><span class="keyword">const</span> <span class="built_in">float</span> inv_sum = __fdividef(<span class="number">1.f</span>, exp_sum + <span class="number">1e-6f</span>);</span><br><span class="line"><span class="keyword">for</span> (<span class="built_in">int</span> i = thread_idx; i &lt; num_tokens; i += NUM_THREADS) &#123;</span><br><span class="line">  logits[i] *= inv_sum;</span><br><span class="line">&#125;</span><br><span class="line">__syncthreads();</span><br></pre></td></tr></table></figure>
+<p>先计算 <code>exp(logit - qk_max)</code>，再用 <code>block_sum</code> 汇总指数和，最后乘 <code>1/(exp_sum+1e-6)</code> 完成归一化。这里会保存当前处理范围内的全部 logits，再统一做 max、sum-exp 和归一化；它不是 FlashAttention 按 K/V tile 持续维护 <code>(m,l,A)</code> 的实现。</p>
+<h4 id="3-2-7-保存-V2-Partition-统计量"><a href="#3-2-7-保存-V2-Partition-统计量" class="headerlink" title="3.2.7 保存 V2 Partition 统计量"></a>3.2.7 保存 V2 Partition 统计量</h4><figure class="highlight nix"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">float* <span class="attr">max_logits_ptr</span> = max_logits +</span><br><span class="line">                        seq_idx * num_heads * max_num_partitions +</span><br><span class="line">                        head_idx * max_num_partitions + partition_idx;</span><br><span class="line">*<span class="attr">max_logits_ptr</span> = qk_max;</span><br><span class="line">float* <span class="attr">exp_sums_ptr</span> = exp_sums + seq_idx * num_heads * max_num_partitions +</span><br><span class="line">                      head_idx * max_num_partitions + partition_idx;</span><br><span class="line">*<span class="attr">exp_sums_ptr</span> = exp_sum;</span><br></pre></td></tr></table></figure>
+<p>真实源码在 <code>USE_PARTITIONING &amp;&amp; thread_idx == 0</code> 条件内写入。每个 partition 保存 <code>qk_max</code> 与 <code>exp_sum</code>，供第二个 kernel 做跨 partition 稳定归并；V1 不需要这组临时 Tensor。</p>
+<h4 id="3-2-8-读取-V-并累加输出"><a href="#3-2-8-读取-V-并累加输出" class="headerlink" title="3.2.8 读取 V 并累加输出"></a>3.2.8 读取 V 并累加输出</h4><figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><span class="line">    <span class="keyword">for</span> (<span class="keyword">int</span> i = <span class="number">0</span>; i &lt; NUM_ROWS_PER_THREAD; i++) &#123;</span><br><span class="line">      <span class="keyword">const</span> <span class="keyword">int</span> row_idx = lane / NUM_V_VECS_PER_ROW + i * NUM_ROWS_PER_ITER;</span><br><span class="line">      <span class="keyword">if</span> (row_idx &lt; HEAD_SIZE) &#123;</span><br><span class="line">        <span class="keyword">const</span> <span class="keyword">int</span> offset = row_idx * BLOCK_SIZE + physical_block_offset;</span><br><span class="line">        V_vec v_vec;</span><br><span class="line"></span><br><span class="line">        <span class="keyword">if</span> (block_idx == num_seq_blocks - <span class="number">1</span>) &#123;</span><br><span class="line">          <span class="comment">// NOTE(woosuk): When v_vec contains the tokens that are out of the</span></span><br><span class="line">          <span class="comment">// context, we should explicitly zero out the values since they may</span></span><br><span class="line">          <span class="comment">// contain NaNs. See</span></span><br><span class="line">          <span class="comment">// https://github.com/vllm-project/vllm/issues/641#issuecomment-1682544472</span></span><br><span class="line">          <span class="keyword">scalar_t</span>* v_vec_ptr = <span class="keyword">reinterpret_cast</span>&lt;<span class="keyword">scalar_t</span>*&gt;(&amp;v_vec);</span><br><span class="line"><span class="meta">#<span class="meta-keyword">pragma</span> unroll</span></span><br><span class="line">          <span class="keyword">for</span> (<span class="keyword">int</span> j = <span class="number">0</span>; j &lt; V_VEC_SIZE; j++) &#123;</span><br><span class="line">            v_vec_ptr[j] = token_idx + j &lt; seq_len ? v_vec_ptr[j] : zero_value;</span><br><span class="line">          &#125;</span><br><span class="line">        &#125;</span><br><span class="line">        accs[i] += <span class="built_in">dot</span>(logits_vec, v_vec);</span><br><span class="line">      &#125;</span><br><span class="line">    &#125;</span><br></pre></td></tr></table></figure>
+<p>这一段关注尾块保护与 <code>dot(logits_vec, v_vec)</code>。在它之前，kernel 已经：</p>
+<ul>
+<li>根据 <code>physical_block_number</code> 与 KV head 定位 V block；</li>
+<li>构造当前 token 范围的 <code>logits_vec</code>；</li>
+<li>按 <code>KV_DTYPE</code> 直接加载 V，或完成 FP8 scale conversion。</li>
+</ul>
+<p>最后一个 KV block 可能未填满，因此上下文之外的 V 元素必须显式清零。否则未使用 slot 中的脏数据或 NaN 可能污染累加结果。</p>
+<h4 id="3-2-9-V2-跨-Partition-归并"><a href="#3-2-9-V2-跨-Partition-归并" class="headerlink" title="3.2.9 V2 跨 Partition 归并"></a>3.2.9 V2 跨 Partition 归并</h4><blockquote>
+<p>代码第一行 <code>paged_attention_v2_reduce_kernel:</code> 是用于标识片段的伪标签，不是合法 C++；整个代码块从真实 reduce kernel 的中段开始，不能独立编译。下面只解释跨 partition 的归并逻辑。</p>
+</blockquote>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><span class="line">paged_attention_v2_reduce_kernel:</span><br><span class="line"></span><br><span class="line">  <span class="comment">// Broadcast the max value to all threads.</span></span><br><span class="line">  max_logit = <span class="built_in">VLLM_SHFL_SYNC</span>(max_logit, <span class="number">0</span>);</span><br><span class="line"></span><br><span class="line">  <span class="comment">// Load rescaled exp sums to shared memory.</span></span><br><span class="line">  <span class="keyword">float</span>* shared_exp_sums =</span><br><span class="line">      <span class="keyword">reinterpret_cast</span>&lt;<span class="keyword">float</span>*&gt;(shared_mem + <span class="built_in"><span class="keyword">sizeof</span></span>(<span class="keyword">float</span>) * num_partitions);</span><br><span class="line">  <span class="keyword">const</span> <span class="keyword">float</span>* exp_sums_ptr = exp_sums +</span><br><span class="line">                              seq_idx * num_heads * max_num_partitions +</span><br><span class="line">                              head_idx * max_num_partitions;</span><br><span class="line">  <span class="keyword">float</span> global_exp_sum = <span class="number">0.0f</span>;</span><br><span class="line">  <span class="keyword">for</span> (<span class="keyword">int</span> i = threadIdx.x; i &lt; num_partitions; i += blockDim.x) &#123;</span><br><span class="line">    <span class="keyword">float</span> l = shared_max_logits[i];</span><br><span class="line">    <span class="keyword">float</span> rescaled_exp_sum = exp_sums_ptr[i] * <span class="built_in">expf</span>(l - max_logit);</span><br><span class="line">    global_exp_sum += rescaled_exp_sum;</span><br><span class="line">    shared_exp_sums[i] = rescaled_exp_sum;</span><br><span class="line">  &#125;</span><br><span class="line">  __syncthreads();</span><br><span class="line">  global_exp_sum = block_sum&lt;NUM_WARPS&gt;(&amp;red_smem[NUM_WARPS], global_exp_sum);</span><br><span class="line">  <span class="keyword">const</span> <span class="keyword">float</span> inv_global_exp_sum = __fdividef(<span class="number">1.0f</span>, global_exp_sum + <span class="number">1e-6</span>f);</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+<p>该片段从最大值广播后的中间位置开始。完整 reduce kernel 会先求所有 partitions 的全局最大值，再把局部指数和缩放到同一基准：</p>
+<script type="math/tex; mode=display">
+m=\max_j m_j,
+\qquad L=\sum_j l_j e^{m_j-m}</script><script type="math/tex; mode=display">
+O=\sum_j O_j\frac{l_j e^{m_j-m}}{L}</script><p>最后还会按相同权重合并 <code>tmp_out</code>。这属于跨 partition 的稳定归并，不是 FlashAttention 跨 K/V tile 的完整 online-softmax 流程。</p>
+<h3 id="3-3-V1-vs-V2-对比"><a href="#3-3-V1-vs-V2-对比" class="headerlink" title="3.3 V1 vs V2 对比"></a>3.3 V1 vs V2 对比</h3><blockquote>
+<p><strong>V1 Engine</strong> 是 <code>vllm/v1/...</code> 的引擎架构；<strong>PagedAttention V1/V2</strong> 是 custom decode kernel 的两个执行方案，两组名称没有版本对应关系。</p>
+</blockquote>
+<p><img src="/images/vllm-pagedattention-core/03_v1_v2_partitions.svg" alt="PagedAttention V1 与 V2"></p>
+<div class="table-container">
+<table>
+<thead>
+<tr>
+<th>维度</th>
+<th>PagedAttention V1</th>
+<th>PagedAttention V2</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>CTA grid</td>
+<td><code>(num_heads, num_seqs, 1)</code></td>
+<td>增加 partition 维</td>
+</tr>
+<tr>
+<td>单个 CTA 的上下文范围</td>
+<td>完整序列</td>
+<td>一个 compute partition</td>
+</tr>
+<tr>
+<td>临时结果</td>
+<td>直接输出</td>
+<td><code>tmp_out</code>、<code>max_logits</code>、<code>exp_sums</code></td>
+</tr>
+<tr>
+<td>第二个 kernel</td>
+<td>不需要</td>
+<td><code>paged_attention_v2_reduce_kernel</code></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>vLLM <code>v0.11.0</code> 默认 partition size 为 512 tokens。V2 通过增加 CUDA blocks 提高长序列或小 batch 下的并行度，但需要额外临时 Tensor 和一次 reduce kernel。</p>
+<p>该版本的选择条件是：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">use_v1 = (</span><br><span class="line">    max_seq_len &lt;= <span class="number">8192</span></span><br><span class="line">    <span class="keyword">and</span> (max_num_partitions == <span class="number">1</span> <span class="keyword">or</span> num_seqs * num_heads &gt; <span class="number">512</span>)</span><br><span class="line">)</span><br></pre></td></tr></table></figure>
+<p>满足条件时使用 V1，否则使用 V2。这是 v0.11.0 的启发式，不是 PagedAttention 的通用定义。</p>
+<h2 id="4-Prefix-Caching：减少重复计算"><a href="#4-Prefix-Caching：减少重复计算" class="headerlink" title="4. Prefix Caching：减少重复计算"></a>4. Prefix Caching：减少重复计算</h2><h3 id="4-1-核心机制"><a href="#4-1-核心机制" class="headerlink" title="4.1 核心机制"></a>4.1 核心机制</h3><p>PagedAttention 解决“一个逻辑块放在哪里”；Prefix Caching 进一步解决“不同请求能否共同引用已经计算好的同一物理块”。</p>
+<p><img src="/images/vllm-pagedattention-core/04_prefix_sharing.svg" alt="Prefix Cache 共享物理块"></p>
+<p>图中共享成立的前提是：相同完整 block 已由较早请求计算并提交。vLLM <code>v0.11.0</code> 在新 block 插入 cache 时不做去重，因此两个请求在同一轮首次生成相同完整 block，并不保证立即指向同一个 physical block；后续请求通过 cache lookup 才可能复用已经缓存的实例。完整边界见 <a target="_blank" rel="noopener" href="https://github.com/vllm-project/vllm/blob/v0.11.0/vllm/v1/core/block_pool.py#L30-L39"><code>block_pool.py:L30-L39</code></a>。</p>
+<p>vLLM 为完整 token block 构造链式 hash：</p>
+<script type="math/tex; mode=display">
+H_i=H(H_{i-1},\ token\_ids_i,\ extra\_keys_i)</script><blockquote>
+<p>以下教学片段省略了完整函数签名、类型上下文和函数定义末尾的冒号，不能直接运行；vLLM <code>v0.11.0</code> 的完整实现见 <a target="_blank" rel="noopener" href="https://github.com/vllm-project/vllm/blob/v0.11.0/vllm/v1/core/kv_cache_utils.py#L547-L573"><code>kv_cache_utils.py:L547-L573</code></a>。</p>
+</blockquote>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="function">def <span class="title">hash_block_tokens</span><span class="params">()</span></span></span><br><span class="line"><span class="function">    <span class="keyword">if</span> <span class="keyword">not</span> parent_block_hash:</span></span><br><span class="line"><span class="function">        parent_block_hash =</span> NONE_HASH</span><br><span class="line"></span><br><span class="line">    curr_block_token_ids_tuple = <span class="built_in">tuple</span>(curr_block_token_ids)</span><br><span class="line">    <span class="keyword">return</span> <span class="built_in">BlockHash</span>(</span><br><span class="line">        <span class="built_in">hash_function</span>(</span><br><span class="line">            (parent_block_hash, curr_block_token_ids_tuple, extra_keys)))</span><br></pre></td></tr></table></figure>
+<p><code>parent_block_hash</code> 把 causal prefix 纳入当前块身份。即使中间某一块 token 完全相同，只要前面的上下文不同，就不能复用相同 KV；第 <code>i</code> 个块 miss 后，后续 hash 链也不能作为连续前缀继续命中。<code>extra_keys</code> 还可能包含多模态内容标识、LoRA ID 或 cache salt。</p>
+<p>只有完整且可确认的 token block 才适合作为普通 Prefix Cache block。未填满尾块、可能被 speculative decoding 拒绝的 token，都不能提前提交为稳定 cache。</p>
+<p>命中一个仍在 free queue 中的 block 时，<code>touch()</code> 会先把它移出淘汰候选队列，再增加引用计数：</p>
+<figure class="highlight mipsasm"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">def touch(self, <span class="keyword">blocks: </span>tuple[list[KVCacheBlock], ...]) -&gt; None:</span><br><span class="line">    for <span class="keyword">blocks_per_group </span>in <span class="keyword">blocks:</span></span><br><span class="line"><span class="keyword"> </span>       for <span class="keyword">block </span>in <span class="keyword">blocks_per_group:</span></span><br><span class="line"><span class="keyword"> </span>           <span class="comment"># ref_cnt=0 means this block is in the free list (i.e. eviction</span></span><br><span class="line">            <span class="comment"># candidate), so remove it.</span></span><br><span class="line">            if <span class="keyword">block.ref_cnt </span>== <span class="number">0</span> <span class="keyword">and </span>not <span class="keyword">block.is_null:</span></span><br><span class="line"><span class="keyword"> </span>               self.free_block_queue.remove(<span class="keyword">block)</span></span><br><span class="line"><span class="keyword"> </span>           <span class="keyword">block.ref_cnt </span>+= <span class="number">1</span></span><br></pre></td></tr></table></figure>
+<p>请求释放引用时，<code>free_blocks()</code> 递减计数，并把归零且非 null 的 block 追加到 free queue：</p>
+<figure class="highlight mipsasm"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">def free_blocks(self, <span class="keyword">ordered_blocks: </span>Iterable[KVCacheBlock]) -&gt; None:</span><br><span class="line">    <span class="keyword">blocks_list </span>= list(<span class="keyword">ordered_blocks)</span></span><br><span class="line"><span class="keyword"> </span>   for <span class="keyword">block </span>in <span class="keyword">blocks_list:</span></span><br><span class="line"><span class="keyword"> </span>       <span class="keyword">block.ref_cnt </span>-= <span class="number">1</span></span><br><span class="line">    self.free_block_queue.append_n([</span><br><span class="line">        <span class="keyword">block </span>for <span class="keyword">block </span>in <span class="keyword">blocks_list</span></span><br><span class="line"><span class="keyword"> </span>       if <span class="keyword">block.ref_cnt </span>== <span class="number">0</span> <span class="keyword">and </span>not <span class="keyword">block.is_null</span></span><br><span class="line"><span class="keyword"> </span>   ])</span><br></pre></td></tr></table></figure>
+<p><code>ref_cnt=0</code> 不代表数据立即清零，只代表 block 可以被重新分配或淘汰；在尚未覆盖前，如果 hash 再次命中，<code>touch()</code> 可以把它取回。free queue 的次序与 block 的最近使用状态共同形成 LRU 风格的淘汰基础。</p>
+<p>即使 Prompt 全部命中，也必须保留产生 logits 所需的计算。vLLM 至少需要重算最后一个 token；受 block 对齐限制，某些路径还会回退一个完整块。</p>
+<h3 id="4-2-实测数据（探索性观测）"><a href="#4-2-实测数据（探索性观测）" class="headerlink" title="4.2 实测数据（探索性观测）"></a>4.2 实测数据（探索性观测）</h3><p>下面是一组探索性端到端观测：</p>
+<div class="table-container">
+<table>
+<thead>
+<tr>
+<th>配置</th>
+<th style="text-align:right">第一轮（截图标注“冷启动”）</th>
+<th style="text-align:right">第二轮（截图标注“热缓存”）</th>
+<th style="text-align:right">本配置第一轮 / 第二轮（加速比）</th>
+<th style="text-align:right">第二轮相对 OFF</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Prefix Cache OFF</td>
+<td style="text-align:right">11.55 s</td>
+<td style="text-align:right">11.53 s</td>
+<td style="text-align:right">1.00×</td>
+<td style="text-align:right">基准</td>
+</tr>
+<tr>
+<td>Prefix Cache ON</td>
+<td style="text-align:right">7.83 s</td>
+<td style="text-align:right">7.66 s</td>
+<td style="text-align:right">1.02×</td>
+<td style="text-align:right">约 1.51×</td>
+</tr>
+</tbody>
+</table>
+</div>
+<details>
+<summary>查看 Prefix Cache 运行截图</summary>
+
+<img src="/images/vllm-pagedattention-core/03_prefix_cache_off.png" alt="Prefix Cache OFF 测试截图">
+
+<img src="/images/vllm-pagedattention-core/04_prefix_cache_on.png" alt="Prefix Cache ON 测试截图">
+
+</details>
+
+<p>这组数据没有记录 <code>num_cached_tokens</code>、稳定 TTFT、模型 warmup 和完整运行参数，因此只能说明当时的 ON 配置端到端时间更短，不能把全部差异归因于 Prefix Cache。</p>
+<p>更可靠的实验应固定 Prompt 与输出长度，用无关请求完成模型 warmup，再执行 cold → repeated-prefix 对照；同时记录命中 token 数，并以 <code>max_tokens=1</code> 的 TTFT 为主要指标，尽量隔离后续 Decode。</p>
+<h3 id="4-3-适用场景"><a href="#4-3-适用场景" class="headerlink" title="4.3 适用场景"></a>4.3 适用场景</h3><div class="table-container">
+<table>
+<thead>
+<tr>
+<th>场景</th>
+<th>Prefix Cache 价值</th>
+<th>关键条件</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>多轮对话</td>
+<td>复用历史对话前缀</td>
+<td>新一轮输入必须以前一轮完整历史开头</td>
+</tr>
+<tr>
+<td>批量任务</td>
+<td>复用模板或固定指令</td>
+<td>公共前缀至少形成一个完整 block</td>
+</tr>
+<tr>
+<td>相同 system prompt</td>
+<td>降低重复 Prefill</td>
+<td>hash 的 extra keys 必须兼容</td>
+</tr>
+<tr>
+<td>每个请求前缀都不同</td>
+<td>通常收益很小</td>
+<td>几乎没有连续 prefix hit</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Prefix Caching 的收益取决于命中长度、block size、cache 压力和到达顺序；“开关已启用”不等于当前请求一定命中。</p>
+<h2 id="5-Chunked-Prefill：混合调度"><a href="#5-Chunked-Prefill：混合调度" class="headerlink" title="5. Chunked Prefill：混合调度"></a>5. Chunked Prefill：混合调度</h2><h3 id="5-1-问题：长-Prompt-的饥饿"><a href="#5-1-问题：长-Prompt-的饥饿" class="headerlink" title="5.1 问题：长 Prompt 的饥饿"></a>5.1 问题：长 Prompt 的饥饿</h3><p>Prefill 需要处理全部 Prompt tokens。若一个 32K Prompt 一次性占用整轮 token budget 和 GPU 时间，已经进入 Decode 的短请求就可能长时间拿不到下一个 token，表现为 TTFT/ITL 尾延迟恶化。</p>
+<p>Chunked Prefill 把长 Prompt 拆成多个 scheduler iterations。每轮只调度一段 Prompt tokens，使同轮尚未消耗的共享 budget 有机会容纳其他请求；是否能容纳、以及实际剩余多少，取决于请求处理顺序、总 token budget 和 <code>long_prefill_token_threshold</code>。它优化的是服务公平性与 head-of-line blocking，不会减少长 Prompt 自身必须完成的 Attention 计算量。</p>
+<h3 id="5-2-Chunked-Prefill-方案"><a href="#5-2-Chunked-Prefill-方案" class="headerlink" title="5.2 Chunked Prefill 方案"></a>5.2 Chunked Prefill 方案</h3><p>vLLM V1 Scheduler 不维护两条互斥的 Prefill/Decode phase；它在一份共享 token budget 内为每个请求计算 <code>num_new_tokens</code>：</p>
+<figure class="highlight haxe"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line">num_new<span class="type">_tokens</span> = (request.num_tokens_with_spec +</span><br><span class="line">                  request.num_output_placeholders -</span><br><span class="line">                  request.num_computed_tokens)</span><br><span class="line"><span class="keyword">if</span> (<span class="number">0</span> &lt; self.scheduler_config.long_prefill_token_threshold &lt;</span><br><span class="line">        num_new<span class="type">_tokens</span>):<span class="type"></span></span><br><span class="line"><span class="type">    num_new_tokens </span>= (</span><br><span class="line">        self.scheduler_config.long_prefill_token_threshold)</span><br><span class="line">num_new<span class="type">_tokens</span> = min(num_new<span class="type">_tokens</span>, token_budget)</span><br><span class="line"></span><br><span class="line"><span class="meta"># Make sure the input position does not exceed the max model len.</span></span><br><span class="line"><span class="meta"># This is necessary when using spec decoding.</span></span><br><span class="line">num_new<span class="type">_tokens</span> = min(</span><br><span class="line">    num_new<span class="type">_tokens</span>,</span><br><span class="line">    self.max_model_len - <span class="number">1</span> - request.num_computed_tokens)</span><br></pre></td></tr></table></figure>
+<p>代码中依次考虑：请求尚未计算的 token、<code>long_prefill_token_threshold</code>、当前 <code>token_budget</code>，以及 speculative decoding 下不能超过 <code>max_model_len-1</code> 的位置限制。</p>
+<p>当请求成功进入本轮调度后，消耗的 token 数从共享 budget 扣除：</p>
+<figure class="highlight fix"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="attr">token_budget -</span>=<span class="string"> num_new_tokens</span></span><br></pre></td></tr></table></figure>
+<p><img src="/images/vllm-pagedattention-core/05_mixed_schedule.svg" alt="Chunked Prefill 与 Decode 混合调度"></p>
+<p>例如一轮中两个 Decode 请求各得到 1 token，长 Prompt 得到 4-token chunk：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">num_scheduled_tokens = [1, 1, 4]</span><br><span class="line">flattened tokens      = [D0, D1, P0, P1, P2, P3]</span><br><span class="line">query_start_loc       = [0, 1, 2, 6]</span><br></pre></td></tr></table></figure>
+<p>相邻 <code>query_start_loc</code> 的差就是本轮各请求的 <code>q_len</code>。vLLM <code>v0.11.0</code> 中，真正根据 <code>q_len</code> 划分计算形态的是 <a target="_blank" rel="noopener" href="https://github.com/vllm-project/vllm/blob/v0.11.0/vllm/v1/attention/backends/utils.py#L721-L771"><code>split_decodes_and_prefills</code></a>：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">query_lens = query_start_loc[<span class="number">1</span>:] - query_start_loc[:-<span class="number">1</span>]</span><br><span class="line"><span class="keyword">if</span> require_uniform:</span><br><span class="line">    is_prefill = query_lens != query_lens[<span class="number">0</span>]</span><br><span class="line"><span class="keyword">else</span>:</span><br><span class="line">    is_prefill = query_lens &gt; decode_threshold</span><br></pre></td></tr></table></figure>
+<p>默认 <code>decode_threshold=1</code>，所以普通路径中 <code>q_len &lt;= 1</code> 会被归为 decode-like；如果 <code>require_uniform=True</code>，则只有与 batch 首个 Query 长度相同的连续请求留在 decode 侧。</p>
+<p>同一文件中的另一个 helper 会在模型执行前按本轮调度 token 数重排 batch，把 decode-like 请求移到前面。下面是它的局部逻辑：</p>
+<blockquote>
+<p>该局部片段省略了 <code>decodes/prefills</code> 初始化、batch move 和 <code>return</code>，不能直接运行；完整实现见 <a target="_blank" rel="noopener" href="https://github.com/vllm-project/vllm/blob/v0.11.0/vllm/v1/attention/backends/utils.py#L774-L834"><code>utils.py:L774-L834</code></a>。</p>
+</blockquote>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">reorder_batch_to_split_decodes_and_prefills</span>(<span class="params"></span></span></span><br><span class="line"><span class="function"><span class="params">    input_batch: <span class="string">&quot;InputBatch&quot;</span>,</span></span></span><br><span class="line"><span class="function"><span class="params">    scheduler_output: <span class="string">&quot;SchedulerOutput&quot;</span>,</span></span></span><br><span class="line"><span class="function"><span class="params">    decode_threshold: <span class="built_in">int</span> = <span class="number">1</span>,</span></span></span><br><span class="line"><span class="function"><span class="params"></span>) -&gt; <span class="built_in">bool</span>:</span></span><br><span class="line">    <span class="string">&quot;&quot;&quot;</span></span><br><span class="line"><span class="string">    Reorders the batch to split into prefill and decode requests; places all</span></span><br><span class="line"><span class="string">    requests with &lt;= decode_threshold tokens at the front of the batch.</span></span><br><span class="line"><span class="string">    </span></span><br><span class="line"><span class="string">    Returns:</span></span><br><span class="line"><span class="string">        True if the batch was modified, False otherwise.</span></span><br><span class="line"><span class="string">    &quot;&quot;&quot;</span></span><br><span class="line"></span><br><span class="line">    <span class="keyword">for</span> i, req_id <span class="keyword">in</span> <span class="built_in">enumerate</span>(input_batch.req_ids):</span><br><span class="line">        num_tokens = scheduler_output.num_scheduled_tokens[req_id]</span><br><span class="line">        <span class="keyword">if</span> num_tokens &lt;= decode_threshold:</span><br><span class="line">            decodes.append(i)</span><br><span class="line">            num_decode_tokens += num_tokens</span><br><span class="line">        <span class="keyword">else</span>:</span><br><span class="line">            prefills.append(i)</span><br><span class="line">            num_prefill_tokens += num_tokens</span><br></pre></td></tr></table></figure>
+<p>展示的 <code>reorder_batch_to_split_decodes_and_prefills</code> 直接读取 <code>scheduler_output.num_scheduled_tokens</code>，并不读取 <code>query_start_loc</code>；<code>q_len</code> 判断属于前面的 <code>split_decodes_and_prefills</code>。两者的默认 threshold 都是 1，但 backend 可以覆盖。这里的 decode/prefill 只描述 attention backend 眼中的本轮计算形态，不是 Scheduler 为请求保存的永久状态。</p>
+<p>同一 scheduler/model batch 也不保证进入同一个 Attention kernel：</p>
+<ul>
+<li>FlashAttention 可以用一次 varlen kernel 处理混合 Query 长度；</li>
+<li>FlashInfer 可以在同一个 layer forward 内分别调用 Prefill 与 Decode wrapper；</li>
+<li>其他 backend 也可能先重排，再走不同 kernel。</li>
+</ul>
+<p>Paged KV 让分段调度真正高效：前一个 chunk 的 K/V 留在已分配物理块中；下一轮只增量写入新 K/V，并通过 Block Table 读取完整历史，不需要拼接整段缓存。</p>
+<h3 id="5-3-实测效果（探索性观测）"><a href="#5-3-实测效果（探索性观测）" class="headerlink" title="5.3 实测效果（探索性观测）"></a>5.3 实测效果（探索性观测）</h3><p>截图中的实验汇总如下。ON 组显式设置 <code>max_num_batched_tokens=2048</code>、<code>long_prefill_token_threshold=1024</code>；OFF 组的 token budget 为 131072。</p>
+<div class="table-container">
+<table>
+<thead>
+<tr>
+<th>实验</th>
+<th>配置</th>
+<th style="text-align:right">Long TTFT</th>
+<th style="text-align:right">Long 总延迟</th>
+<th style="text-align:right">Short TTFT median</th>
+<th style="text-align:right">Short TTFT max</th>
+<th style="text-align:right">Short latency median</th>
+<th style="text-align:right">Short latency max</th>
+<th>现象</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>实验 1</td>
+<td>Chunked Prefill ON，budget 2048，threshold 1024</td>
+<td style="text-align:right">25.89 s</td>
+<td style="text-align:right">26.55 s</td>
+<td style="text-align:right">0.415 s</td>
+<td style="text-align:right">0.688 s</td>
+<td style="text-align:right">0.416 s</td>
+<td style="text-align:right">0.691 s</td>
+<td>短请求基本都能在 Long Prefill 期间插入执行</td>
+</tr>
+<tr>
+<td>实验 2</td>
+<td>Chunked Prefill OFF，budget 131072</td>
+<td style="text-align:right">26.74 s</td>
+<td style="text-align:right">27.45 s</td>
+<td style="text-align:right">25.597 s</td>
+<td style="text-align:right">26.437 s</td>
+<td style="text-align:right">25.602 s</td>
+<td style="text-align:right">26.441 s</td>
+<td>短请求基本被 Long Prefill 阻塞到 Long 首 token 附近</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>截图给出的逐指标对比保留了更多小数位：</p>
+<div class="table-container">
+<table>
+<thead>
+<tr>
+<th>指标</th>
+<th style="text-align:right">Chunked ON + threshold 1024</th>
+<th style="text-align:right">Chunked OFF</th>
+<th>截图中的改善幅度</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Short TTFT median</td>
+<td style="text-align:right">0.415 s</td>
+<td style="text-align:right">25.597 s</td>
+<td>约 61.7× 更低</td>
+</tr>
+<tr>
+<td>Short TTFT max</td>
+<td style="text-align:right">0.688 s</td>
+<td style="text-align:right">26.437 s</td>
+<td>约 38.4× 更低</td>
+</tr>
+<tr>
+<td>Short latency median</td>
+<td style="text-align:right">0.416 s</td>
+<td style="text-align:right">25.602 s</td>
+<td>约 61.5× 更低</td>
+</tr>
+<tr>
+<td>Short latency max</td>
+<td style="text-align:right">0.691 s</td>
+<td style="text-align:right">26.441 s</td>
+<td>约 38.3× 更低</td>
+</tr>
+<tr>
+<td>Long TTFT</td>
+<td style="text-align:right">25.895 s</td>
+<td style="text-align:right">26.738 s</td>
+<td>ON 略快约 0.84 s</td>
+</tr>
+<tr>
+<td>Long 总延迟</td>
+<td style="text-align:right">26.555 s</td>
+<td style="text-align:right">27.452 s</td>
+<td>ON 略快约 0.90 s</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>按请求时间线统计，短请求首 token 的分布为：</p>
+<div class="table-container">
+<table>
+<thead>
+<tr>
+<th>实验</th>
+<th>Short 请求首 token 分布</th>
+<th style="text-align:right">Long first token 时间</th>
+<th>结论</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Chunked ON + threshold 1024</td>
+<td><code>short-0</code> 至 <code>short-19</code> 都在约 0.95–2.59 s 拿到首 token</td>
+<td style="text-align:right">26.04 s</td>
+<td>短请求成功穿插到 Long Prefill 中</td>
+</tr>
+<tr>
+<td>Chunked OFF</td>
+<td>除 <code>short-0</code> 外，大部分 Short 请求在约 26.85–26.96 s 拿到首 token</td>
+<td style="text-align:right">26.87 s</td>
+<td>短请求被 Long Prefill 阻塞，直到 Long Prefill 结束</td>
+</tr>
+</tbody>
+</table>
+</div>
+<details>
+<summary>查看 Chunked Prefill 延迟截图</summary>
+
+<img src="/images/vllm-pagedattention-core/05_chunked_prefill_latency.png" alt="Chunked Prefill 延迟截图">
+
+</details>
+
+<p>两组观测相差约 61.7×，但实验同时修改了 Chunked Prefill 标签和 scheduler token budget，而且没有记录 engine 版本与 effective config，不能当作 Chunked Prefill 单变量加速比。</p>
+<p>还有一个明确的版本边界：vLLM <code>v0.11.0</code> 在常见 GPU/TPU 的 V1 非 pooling 路径中会启用 Chunked Prefill；POWER、ARM 和 s390x CPU 是平台例外，V1 会再次将其禁用。因此表中的 OFF 标签不能直接视为当前常见 GPU V1 路径的合法对照，它可能来自其他 engine、版本或例外平台。</p>
+<p>Chunk 越小并不必然越好：</p>
+<ul>
+<li>小 chunk 通常改善短请求 TTFT/ITL 和调度公平性；</li>
+<li>过小会增加 scheduler iterations、kernel launch 和长 Prompt 完成时间；</li>
+<li>大 chunk 提高单轮计算量，却可能重新放大短请求尾延迟。</li>
+</ul>
+<p>应固定真实到达时间线，扫描 <code>max_num_batched_tokens</code> 与 <code>long_prefill_token_threshold</code>，同时报告短请求 TTFT/ITL P50/P95/P99 和长请求吞吐。</p>
+<h2 id="6-Sampling：从-Logits-到-Token"><a href="#6-Sampling：从-Logits-到-Token" class="headerlink" title="6. Sampling：从 Logits 到 Token"></a>6. Sampling：从 Logits 到 Token</h2><h3 id="6-1-常见采样方法"><a href="#6-1-常见采样方法" class="headerlink" title="6.1 常见采样方法"></a>6.1 常见采样方法</h3><p>最后一层 hidden state 经 LM Head 投影为词表 logits，Sampler 才开始工作：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">Transformer → LM Head → logits → Sampler → sampled_token_ids</span><br><span class="line">                                               ↓</span><br><span class="line">                          更新请求、检查停止条件、进入下一轮</span><br></pre></td></tr></table></figure>
+<p>Greedy Sampling 直接选择最大 logit：</p>
+<figure class="highlight ini"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="attr">next_token</span> = torch.argmax(logits, dim=-<span class="number">1</span>)</span><br></pre></td></tr></table></figure>
+<p>Temperature、Top-k 和 Top-p 的最小参数表示如下：</p>
+<figure class="highlight ini"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="attr">logits</span> = logits / temperature</span><br></pre></td></tr></table></figure>
+<p>这里的 <code>temperature=0</code> 是 Greedy 的接口语义，不是实际除数。vLLM <code>v0.11.0</code> 把 <code>&lt;1e-5</code> 视为 Greedy；混合 batch 在缩放前会把这些行的 temperature 临时替换为 <code>1.0</code>，随后再用 <code>torch.where</code> 选择 Greedy 结果，因此不会执行 <code>logits / 0</code>。实现见 <a target="_blank" rel="noopener" href="https://github.com/vllm-project/vllm/blob/v0.11.0/vllm/v1/sample/sampler.py#L127-L195"><code>sampler.py:L127-L195</code></a>。</p>
+<figure class="highlight ini"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="attr">top_k</span> = <span class="number">5</span></span><br></pre></td></tr></table></figure>
+<figure class="highlight apache"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="attribute">top_p</span> = <span class="number">0</span>.<span class="number">9</span></span><br></pre></td></tr></table></figure>
+<div class="table-container">
+<table>
+<thead>
+<tr>
+<th>方法</th>
+<th>适用场景</th>
+<th>输出特点</th>
+<th>性能影响</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Greedy，<code>temperature=0</code></td>
+<td>代码、数学、分类、结构化抽取</td>
+<td>确定性最高，直接选择最大 logit</td>
+<td>最低，主要是一次 <code>argmax</code></td>
+</tr>
+<tr>
+<td>Temperature</td>
+<td>通用对话、创作</td>
+<td>调整整体分布的尖锐程度</td>
+<td>需要缩放、softmax 和随机采样，比 Greedy 稍慢</td>
+</tr>
+<tr>
+<td>Top-k</td>
+<td>希望候选数量固定</td>
+<td>只保留概率最高的 <code>k</code> 个 token</td>
+<td>中等；Top-k-only 不需要全词表排序</td>
+</tr>
+<tr>
+<td>Top-p</td>
+<td>对话、开放式生成</td>
+<td>保留累计概率达到 <code>p</code> 的动态候选集</td>
+<td>原生实现较贵，需要对整个词表排序</td>
+</tr>
+<tr>
+<td>Min-p</td>
+<td>高温创作、抑制低概率长尾 token</td>
+<td>相对于最高概率动态过滤</td>
+<td>需要 softmax、max 和 mask，但不需要排序</td>
+</tr>
+<tr>
+<td>Beam Search</td>
+<td>翻译、短序列搜索、候选评分</td>
+<td>同时保留多个高分路径</td>
+<td>很高；计算量和 KV Cache 大致随 beam width 增长</td>
+</tr>
+<tr>
+<td><code>n&gt;1</code> 独立采样</td>
+<td>需要多个创意候选</td>
+<td>生成多条随机序列</td>
+<td>Decode 计算和 KV Cache 近似随 <code>n</code> 增长</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>参数没有脱离任务的全局最优值。确定性任务通常从 Greedy 开始；开放式对话常用适中的 Temperature + Top-p；高温导致长尾候选过多时，可以评估 Min-p。</p>
+<h3 id="6-2-性能影响"><a href="#6-2-性能影响" class="headerlink" title="6.2 性能影响"></a>6.2 性能影响</h3><p>采样通常小于大模型 forward 的成本，但在大 batch、大词表、小模型或请求大量 <code>logprobs</code> 时可能成为明显开销。</p>
+<p>vLLM <code>v0.11.0</code> 的 batch 路径有三种：</p>
+<ul>
+<li><strong>全 Greedy</strong>：计算 <code>argmax</code> 后提前返回；</li>
+<li><strong>全 Random</strong>：跳过 Greedy，只计算随机路径；</li>
+<li><strong>Greedy/Random 混合</strong>：两条结果都计算，再用 <code>torch.where</code> 按请求选择。</li>
+</ul>
+<p>不同过滤器的主要额外工作也不同：</p>
+<div class="table-container">
+<table>
+<thead>
+<tr>
+<th>路径</th>
+<th>主要工作</th>
+<th>性能边界</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Greedy</td>
+<td>全词表 <code>argmax</code></td>
+<td>通常最轻，但仍扫描 vocab</td>
+</tr>
+<tr>
+<td>Temperature</td>
+<td>逐元素缩放</td>
+<td>后续仍需概率化和随机采样</td>
+</tr>
+<tr>
+<td>Native Top-k only</td>
+<td><code>topk</code></td>
+<td>不必完整排序全词表</td>
+</tr>
+<tr>
+<td>Native Top-p</td>
+<td>sort、softmax、cumsum、scatter</td>
+<td>大词表时更明显</td>
+</tr>
+<tr>
+<td>Min-p</td>
+<td>全词表 softmax、amax、阈值 mask，之后仍随机采样</td>
+<td>高温或大词表时会增加概率化与逐元素处理开销</td>
+</tr>
+<tr>
+<td>FlashInfer rejection sampling</td>
+<td>避免 native 全排序</td>
+<td>有版本、seed、logprobs mode、环境变量限制，并包含 CPU–GPU 同步</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p><code>logprobs=N</code> 常比小幅调整 <code>top_p</code> 更值得关注：默认 raw-logprobs 路径会计算 FP32 <code>log_softmax</code>，随后还要做 top-k、sampled-token gather 和 rank 计算。</p>
+<p>Beam Search 和 <code>n&gt;1</code> 都会增加活跃请求数、模型 forward 工作量和峰值 KV 占用。实际倍率受 Prefix Cache、候选提前结束和 scheduler batching 影响，不能简单写成严格的 <code>W×</code> 或 <code>n×</code>。</p>
+<details>
+<summary>查看 Sampling 方法截图</summary>
+
+<img src="/images/vllm-pagedattention-core/06_sampling_methods.png" alt="Sampling 方法截图">
+
+</details>
+
+<h2 id="7-长上下文综合优化"><a href="#7-长上下文综合优化" class="headerlink" title="7. 长上下文综合优化"></a>7. 长上下文综合优化</h2><h3 id="7-1-32K-Tokens-场景"><a href="#7-1-32K-Tokens-场景" class="headerlink" title="7.1 32K Tokens 场景"></a>7.1 32K Tokens 场景</h3><p>长上下文没有单一“最佳开关”。首先要区分负载：</p>
+<ul>
+<li><strong>单文档问答</strong>：Prompt 很长，但公共前缀较少。主要矛盾是 Prefill 计算、KV 容量和短请求排队；Paged KV + 合理 token budget 更重要。</li>
+<li><strong>多轮对话</strong>：每轮都携带之前的完整历史。若历史形成稳定完整 blocks，Prefix Cache 可以复用大量 causal prefix；Paged KV 负责继续追加新 K/V。</li>
+</ul>
+<p>以前述 32 层、8 KV heads、<code>head_dim=128</code>、BF16 为例，32K KV Cache 约 4 GiB。并发容量还要考虑模型权重、activation workspace、CUDA Graph、临时 partition buffers 和 allocator 对齐，不能只用 HBM 总容量除以 4 GiB。</p>
+<div class="table-container">
+<table>
+<thead>
+<tr>
+<th>场景</th>
+<th>首要矛盾</th>
+<th>重点机制</th>
+<th>关键指标</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>单个长文档</td>
+<td>Prefill 计算量、KV 容量</td>
+<td>Paged KV、Chunked Prefill</td>
+<td>TTFT、吞吐、可用 KV blocks、抢占</td>
+</tr>
+<tr>
+<td>公共模板批处理</td>
+<td>重复前缀计算</td>
+<td>Prefix Cache</td>
+<td>命中 token、TTFT、block 淘汰</td>
+</tr>
+<tr>
+<td>多轮对话</td>
+<td>历史前缀重复、尾部持续增长</td>
+<td>Prefix Cache + Paged KV</td>
+<td>命中长度、ITL、端到端延迟</td>
+</tr>
+<tr>
+<td>长 Prefill + 短 Decode</td>
+<td>head-of-line blocking</td>
+<td>Chunked Prefill</td>
+<td>短请求 TTFT/ITL P95/P99、长请求吞吐</td>
+</tr>
+</tbody>
+</table>
+</div>
+<h3 id="7-2-优化组合效果（探索性观测）"><a href="#7-2-优化组合效果（探索性观测）" class="headerlink" title="7.2 优化组合效果（探索性观测）"></a>7.2 优化组合效果（探索性观测）</h3><div class="table-container">
+<table>
+<thead>
+<tr>
+<th>配置</th>
+<th style="text-align:right">单文档</th>
+<th style="text-align:right">多轮对话</th>
+<th style="text-align:right">截图中的显存</th>
+<th style="text-align:right">单文档 / 多轮相对 Baseline</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Baseline</td>
+<td style="text-align:right">16.39 s</td>
+<td style="text-align:right">29.69 s</td>
+<td style="text-align:right">0.00 GB</td>
+<td style="text-align:right">1.00× / 1.00×</td>
+</tr>
+<tr>
+<td>Chunked Prefill，budget 2048</td>
+<td style="text-align:right">16.36 s</td>
+<td style="text-align:right">29.76 s</td>
+<td style="text-align:right">0.00 GB</td>
+<td style="text-align:right">1.00× / 1.00×</td>
+</tr>
+<tr>
+<td>Prefix Cache</td>
+<td style="text-align:right">16.44 s</td>
+<td style="text-align:right">13.28 s</td>
+<td style="text-align:right">0.00 GB</td>
+<td style="text-align:right">1.00× / 2.24×</td>
+</tr>
+<tr>
+<td>Prefix Cache + Chunked，budget 2048</td>
+<td style="text-align:right">16.41 s</td>
+<td style="text-align:right">13.35 s</td>
+<td style="text-align:right">0.00 GB</td>
+<td style="text-align:right">1.00× / 2.22×</td>
+</tr>
+<tr>
+<td>Prefix Cache + Chunked，budget 4096</td>
+<td style="text-align:right">16.44 s</td>
+<td style="text-align:right">13.27 s</td>
+<td style="text-align:right">0.00 GB</td>
+<td style="text-align:right">1.00× / 2.24×</td>
+</tr>
+</tbody>
+</table>
+</div>
+<details>
+<summary>查看长上下文组合截图</summary>
+
+<img src="/images/vllm-pagedattention-core/07_long_context_combo.png" alt="长上下文组合截图">
+
+</details>
+
+<p>观测方向与机制预期兼容：若该次单文档输入没有可复用前缀，几组配置差异很小是合理现象；多轮对话在 Prefix Cache 标签下时间更短。但实验缺少 <code>num_cached_tokens</code>、控制变量和完整运行配置，不能据此确认实际命中，也不能把约 2.24× 的差异当作正式加速比。截图中的显存列为 <code>0.00 GB</code>，同样不能据此得出显存节省结论。</p>
+<h3 id="7-3-最佳实践"><a href="#7-3-最佳实践" class="headerlink" title="7.3 最佳实践"></a>7.3 最佳实践</h3><p>先确定 SLA，再回放真实 Prompt/输出长度和到达分布。建议按以下顺序调优：</p>
+<ol>
+<li><strong>验证地址与容量</strong>：确认 block size、KV dtype、可用 KV blocks、抢占和重计算；</li>
+<li><strong>验证 Prefix Cache</strong>：记录 <code>num_cached_tokens</code>，区分启用与实际命中；</li>
+<li><strong>扫描 token budget</strong>：逐步调整 <code>max_num_batched_tokens</code>，观察 TTFT/ITL 与吞吐；</li>
+<li><strong>限制单个长 Prefill</strong>：必要时设置 <code>long_prefill_token_threshold</code>，避免一个请求吞掉大部分预算；</li>
+<li><strong>控制 batch 上限</strong>：<code>max_num_seqs</code> 只是序列数上限，实际并发仍受 token budget 与 KV 容量约束；</li>
+<li><strong>单变量实验</strong>：固定 engine 版本、backend、模型、输入和到达时间线，每次只改一个参数。</li>
+</ol>
+<p>正式报告至少应包含：</p>
+<ul>
+<li>模型、dtype、KV dtype、GPU、vLLM commit、Attention backend 与完整启动参数；</li>
+<li>Prompt tokens、公共前缀 tokens、输出 tokens、并发和到达时间线；</li>
+<li>TTFT、ITL、端到端延迟和吞吐的 P50/P95/P99；</li>
+<li>Prefix Cache 命中 token、GPU KV blocks、抢占/重计算次数；</li>
+<li>cold start、warmup、重复次数与测量区间。</li>
+</ul>
+<p>PagedAttention 的核心不是把 Attention 公式改成“分页公式”，而是建立稳定的 KV 地址抽象：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">逻辑 token 位置</span><br><span class="line">  → logical block + offset</span><br><span class="line">  → block_table</span><br><span class="line">  → physical block</span><br><span class="line">  → K/V 地址</span><br></pre></td></tr></table></figure>
+<p>在这层抽象之上，FlashAttention 优化 IO，Prefix Cache 复用公共前缀，Chunked Prefill 改善调度公平性，Sampling 决定 logits 之后的候选过滤与选择。只有把存储、计算、调度和采样分层观察，才能正确解释长上下文服务的容量、吞吐与尾延迟。</p>
+<h2 id="参考资料"><a href="#参考资料" class="headerlink" title="参考资料"></a>参考资料</h2><ul>
+<li><a target="_blank" rel="noopener" href="https://arxiv.org/abs/2205.14135">FlashAttention: Fast and Memory-Efficient Exact Attention with IO-Awareness</a></li>
+<li><a target="_blank" rel="noopener" href="https://arxiv.org/abs/2309.06180">Efficient Memory Management for Large Language Model Serving with PagedAttention</a></li>
+<li><a target="_blank" rel="noopener" href="https://docs.nvidia.com/cuda/ampere-tuning-guide/">NVIDIA Ampere GPU Architecture Tuning Guide</a></li>
+<li><a target="_blank" rel="noopener" href="https://github.com/vllm-project/vllm/blob/v0.11.0/vllm/v1/core/sched/scheduler.py">V1 Scheduler：统一 token budget</a></li>
+<li><a target="_blank" rel="noopener" href="https://github.com/vllm-project/vllm/blob/v0.11.0/vllm/engine/arg_utils.py">EngineArgs：V1 Chunked Prefill 版本边界</a></li>
+<li><a target="_blank" rel="noopener" href="https://github.com/vllm-project/vllm/blob/v0.11.0/vllm/v1/worker/gpu_model_runner.py">GPU Model Runner：ragged batch 与 Attention metadata</a></li>
+<li><a target="_blank" rel="noopener" href="https://github.com/vllm-project/vllm/blob/v0.11.0/vllm/v1/worker/block_table.py">BlockTable：slot_mapping 计算</a></li>
+<li><a target="_blank" rel="noopener" href="https://github.com/vllm-project/vllm/blob/v0.11.0/vllm/v1/attention/backends/utils.py">Attention backend utilities：q_len 与 decode_threshold</a></li>
+<li><a target="_blank" rel="noopener" href="https://github.com/vllm-project/vllm/blob/v0.11.0/vllm/v1/core/kv_cache_utils.py">Prefix Cache hash chain</a></li>
+<li><a target="_blank" rel="noopener" href="https://github.com/vllm-project/vllm/blob/v0.11.0/vllm/v1/core/block_pool.py">Block Pool：引用计数与 free queue</a></li>
+<li><a target="_blank" rel="noopener" href="https://github.com/vllm-project/vllm/blob/v0.11.0/vllm/attention/ops/paged_attn.py">Custom PagedAttention wrapper 与 V1/V2 选择</a></li>
+<li><a target="_blank" rel="noopener" href="https://github.com/vllm-project/vllm/blob/v0.11.0/csrc/attention/attention_kernels.cuh">Custom PagedAttention CUDA kernel</a></li>
+<li><a target="_blank" rel="noopener" href="https://github.com/vllm-project/vllm/blob/v0.11.0/vllm/v1/sample/sampler.py">V1 Sampler</a></li>
+<li><a target="_blank" rel="noopener" href="https://github.com/vllm-project/vllm/blob/v0.11.0/vllm/v1/sample/ops/topk_topp_sampler.py">Top-k/Top-p sampler</a></li>
+</ul>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          
+
+<div class="post-copyright">
+<ul>
+  <li class="post-copyright-author">
+      <strong>Post author:  </strong>zzz
+  </li>
+  <li class="post-copyright-link">
+      <strong>Post link: </strong>
+      <a href="http://wazhb.com/2026/08/21/20260821-vllm-pagedattention-core/" title="vLLM 深度解析（二）：PagedAttention 核心机制">http://wazhb.com/2026/08/21/20260821-vllm-pagedattention-core/</a>
+  </li>
+  <li class="post-copyright-license">
+    <strong>Copyright Notice:  </strong>All articles in this blog are licensed under <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/deed.zh" rel="noopener" target="_blank"><i class="fab fa-fw fa-creative-commons"></i>BY-NC-SA</a> unless stating additionally.
+  </li>
+</ul>
+</div>
+
+          <div class="post-tags">
+              
+              <a href="/tags/vLLM/" rel="tag"><i class="fa fa-tag"></i> vLLM</a>
+              
+              <a href="/tags/PagedAttention/" rel="tag"><i class="fa fa-tag"></i> PagedAttention</a>
+              
+              <a href="/tags/FlashAttention/" rel="tag"><i class="fa fa-tag"></i> FlashAttention</a>
+              
+              <a href="/tags/Prefix-Caching/" rel="tag"><i class="fa fa-tag"></i> Prefix Caching</a>
+              
+              <a href="/tags/Chunked-Prefill/" rel="tag"><i class="fa fa-tag"></i> Chunked Prefill</a>
+              
+              <a href="/tags/Sampling/" rel="tag"><i class="fa fa-tag"></i> Sampling</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2026/07/06/20260706-vllm-architecture-api-to-token-generation/" rel="prev" title="vLLM 架构源码解析（一）：从 API 请求到 Token 生成">
+                  <i class="fa fa-chevron-left"></i> vLLM 架构源码解析（一）：从 API 请求到 Token 生成
+                </a>
+            </div>
+            <div class="post-nav-item">
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+<script src="/js/comments.js"></script>
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+
+<div class="copyright">
+  &copy; 2020 – 
+  <span itemprop="copyrightYear">2026</span>
+  <span class="with-love">
+    <i class="fa fa-heart"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">zzz</span>
+</div>
+<div class="busuanzi-count">
+    <span class="post-meta-item" id="busuanzi_container_site_uv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-user"></i>
+      </span>
+      <span class="site-uv" title="Total Visitors">
+        <span id="busuanzi_value_site_uv"></span>
+      </span>
+    </span>
+    <span class="post-meta-item" id="busuanzi_container_site_pv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-eye"></i>
+      </span>
+      <span class="site-pv" title="Total Views">
+        <span id="busuanzi_value_site_pv"></span>
+      </span>
+    </span>
+</div>
+
+
+    <script async src="//dn-lbstatics.qbox.me/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+
+    </div>
+  </footer>
+
+  
+  <script src="https://cdn.jsdelivr.net/npm/animejs@3.2.1/lib/anime.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jquery@3.6.0/dist/jquery.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@fancyapps/fancybox@3.5.7/dist/jquery.fancybox.min.js"></script>
+<script src="/js/utils.js"></script><script src="/js/motion.js"></script><script src="/js/next-boot.js"></script>
+
+  
+<script src="/js/third-party/search/local-search.js"></script>
+
+
+
+
+
+
+  
+  <script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+
+
+
+  
+
+  <script class="next-config" data-name="enableMath" type="application/json">true</script><script class="next-config" data-name="mathjax" type="application/json">{&quot;enable&quot;:true,&quot;tags&quot;:&quot;none&quot;,&quot;js&quot;:&quot;https:&#x2F;&#x2F;cdn.jsdelivr.net&#x2F;npm&#x2F;mathjax@3.1.2&#x2F;es5&#x2F;tex-mml-chtml.js&quot;}</script>
+<script src="/js/third-party/math/mathjax.js"></script>
+
+
+
+</body>
+</html>

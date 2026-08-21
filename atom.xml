@@ -6,7 +6,7 @@
   <link href="http://wazhb.com/atom.xml" rel="self"/>
   
   <link href="http://wazhb.com/"/>
-  <updated>2026-07-07T06:05:50.428Z</updated>
+  <updated>2026-08-21T06:48:29.279Z</updated>
   <id>http://wazhb.com/</id>
   
   <author>
@@ -15,6 +15,37 @@
   </author>
   
   <generator uri="https://hexo.io/">Hexo</generator>
+  
+  <entry>
+    <title>vLLM 深度解析（二）：PagedAttention 核心机制</title>
+    <link href="http://wazhb.com/2026/08/21/20260821-vllm-pagedattention-core/"/>
+    <id>http://wazhb.com/2026/08/21/20260821-vllm-pagedattention-core/</id>
+    <published>2026-08-20T16:00:00.000Z</published>
+    <updated>2026-08-21T06:48:29.279Z</updated>
+    
+    
+    <summary type="html">从 Attention 的 IO 瓶颈出发，沿 vLLM v0.11.0 源码解释 PagedAttention、Prefix Caching、Chunked Prefill 与 Sampling。</summary>
+    
+    
+    
+    <category term="AI Infra" scheme="http://wazhb.com/categories/AI-Infra/"/>
+    
+    <category term="vLLM" scheme="http://wazhb.com/categories/AI-Infra/vLLM/"/>
+    
+    
+    <category term="vLLM" scheme="http://wazhb.com/tags/vLLM/"/>
+    
+    <category term="PagedAttention" scheme="http://wazhb.com/tags/PagedAttention/"/>
+    
+    <category term="FlashAttention" scheme="http://wazhb.com/tags/FlashAttention/"/>
+    
+    <category term="Prefix Caching" scheme="http://wazhb.com/tags/Prefix-Caching/"/>
+    
+    <category term="Chunked Prefill" scheme="http://wazhb.com/tags/Chunked-Prefill/"/>
+    
+    <category term="Sampling" scheme="http://wazhb.com/tags/Sampling/"/>
+    
+  </entry>
   
   <entry>
     <title>vLLM 架构源码解析（一）：从 API 请求到 Token 生成</title>
@@ -69,7 +100,7 @@
     <link href="http://wazhb.com/2026/06/10/20260610-write-agent-learning/"/>
     <id>http://wazhb.com/2026/06/10/20260610-write-agent-learning/</id>
     <published>2026-06-09T16:00:00.000Z</published>
-    <updated>2026-07-07T02:52:23.581Z</updated>
+    <updated>2026-07-07T06:14:36.162Z</updated>
     
     
     <summary type="html">&lt;p&gt;最近整理了一份关于“如何写一个 Agent”的学习路径。学习之后最大的感受是：Agent 不是一段更长的 prompt，也不是把几个工具随便接到模型后面，而是一个可控的 runtime。这个 runtime 至少包含模型决策循环、工具调用、状态管理、权限边界、上下文管理和终止条件。&lt;/p&gt;</summary>
@@ -92,7 +123,7 @@
     <link href="http://wazhb.com/2026/06/10/20260610-tpu-model-compiler-kernel-vllm-linux/"/>
     <id>http://wazhb.com/2026/06/10/20260610-tpu-model-compiler-kernel-vllm-linux/</id>
     <published>2026-06-09T16:00:00.000Z</published>
-    <updated>2026-07-07T02:52:23.580Z</updated>
+    <updated>2026-07-07T06:14:36.162Z</updated>
     
     
     <summary type="html">&lt;p&gt;最近在梳理大模型基础设施的系统分层图：大模型、深度学习框架、Tensor、算子、算子内核、DLC/编译器、vLLM、TPU Runtime、Linux 内核和 TPU 硬件分别处在哪一层，各自解决什么问题。&lt;/p&gt;
@@ -124,7 +155,7 @@
     <link href="http://wazhb.com/2024/06/23/IDT&amp;GDT/"/>
     <id>http://wazhb.com/2024/06/23/IDT&amp;GDT/</id>
     <published>2024-06-22T16:00:00.000Z</published>
-    <updated>2026-07-07T02:52:23.582Z</updated>
+    <updated>2026-07-07T06:14:36.163Z</updated>
     
     
     <summary type="html">&lt;h2 id=&quot;VGA-设定&quot;&gt;&lt;a href=&quot;#VGA-设定&quot; class=&quot;headerlink&quot; title=&quot;VGA 设定&quot;&gt;&lt;/a&gt;VGA 设定&lt;/h2&gt;&lt;p&gt;首先简单看待调色板设定的相关程序，具体可以参考下面的链接：&lt;/p&gt;
@@ -149,7 +180,7 @@
     <link href="http://wazhb.com/2024/06/02/%E5%88%9D%E8%AF%86%E6%93%8D%E4%BD%9C%E7%B3%BB%E7%BB%9F/"/>
     <id>http://wazhb.com/2024/06/02/%E5%88%9D%E8%AF%86%E6%93%8D%E4%BD%9C%E7%B3%BB%E7%BB%9F/</id>
     <published>2024-06-01T16:00:00.000Z</published>
-    <updated>2026-07-07T02:52:23.582Z</updated>
+    <updated>2026-07-07T06:14:36.163Z</updated>
     
     
     <summary type="html">&lt;h2 id=&quot;工具介绍&quot;&gt;&lt;a href=&quot;#工具介绍&quot; class=&quot;headerlink&quot; title=&quot;工具介绍&quot;&gt;&lt;/a&gt;工具介绍&lt;/h2&gt;&lt;ul&gt;
@@ -202,7 +233,7 @@
     <link href="http://wazhb.com/2024/05/26/20240526-%E6%8C%87%E4%BB%A4%E9%9B%86%E5%9F%BA%E6%9C%AC%E5%8E%9F%E7%90%86/"/>
     <id>http://wazhb.com/2024/05/26/20240526-%E6%8C%87%E4%BB%A4%E9%9B%86%E5%9F%BA%E6%9C%AC%E5%8E%9F%E7%90%86/</id>
     <published>2024-05-25T16:00:00.000Z</published>
-    <updated>2026-07-07T02:52:23.580Z</updated>
+    <updated>2026-07-07T06:14:36.162Z</updated>
     
     
     <summary type="html">&lt;h1 id=&quot;计算机体系结构背景&quot;&gt;&lt;a href=&quot;#计算机体系结构背景&quot; class=&quot;headerlink&quot; title=&quot;计算机体系结构背景&quot;&gt;&lt;/a&gt;计算机体系结构背景&lt;/h1&gt;&lt;p&gt;简单介绍一下，计算机体系结构狭义上是指关于指令集的设计（广义上的概念会在下一篇中定义），从我们学习的各种编程语言出发，向上是各种应用的编写，向下是程序语言如何编译成计算机所能执行的二进制文件，这里就需要和指令集打交道。高级语言一般不涉及到内存和硬件，在编译过程中指令集的体系结构会起到相当大的影响，比如调用指令集的ADD方法，在不同的指令集中有不同的实现，包括是否使用寄存器，使用多少寄存器，这会影响到程序执行速度以及程序的大小，体系结构也是主要是指令集的设计。&lt;/p&gt;
@@ -233,7 +264,7 @@
     <link href="http://wazhb.com/2021/06/02/How-to-think-about-psychology-11-12/"/>
     <id>http://wazhb.com/2021/06/02/How-to-think-about-psychology-11-12/</id>
     <published>2021-06-02T14:26:23.000Z</published>
-    <updated>2026-07-07T02:52:23.581Z</updated>
+    <updated>2026-07-07T06:14:36.163Z</updated>
     
     
     <summary type="html">&lt;h1 id=&quot;这才是心理学（11-12）How-to-think-about-psychology&quot;&gt;&lt;a href=&quot;#这才是心理学（11-12）How-to-think-about-psychology&quot; class=&quot;headerlink&quot; title=&quot;这才是心理学（11-12）How to think about psychology&quot;&gt;&lt;/a&gt;这才是心理学（11-12）How to think about psychology&lt;/h1&gt;&lt;p&gt;&amp;emsp;接近一周的对于这本心理学入门的书籍进行的笔记也结束了，后续会针对整本书进行一个总结和回顾吧。&lt;/p&gt;
@@ -261,7 +292,7 @@
     <link href="http://wazhb.com/2021/06/01/How-to-think-about-psychology-8-10/"/>
     <id>http://wazhb.com/2021/06/01/How-to-think-about-psychology-8-10/</id>
     <published>2021-06-01T14:12:12.000Z</published>
-    <updated>2026-07-07T02:52:23.582Z</updated>
+    <updated>2026-07-07T06:14:36.163Z</updated>
     
     
     <summary type="html">&lt;h1 id=&quot;这才是心理学（8-10）How-to-think-about-psychology&quot;&gt;&lt;a href=&quot;#这才是心理学（8-10）How-to-think-about-psychology&quot; class=&quot;headerlink&quot; title=&quot;这才是心理学（8-10）How to think about psychology&quot;&gt;&lt;/a&gt;这才是心理学（8-10）How to think about psychology&lt;/h1&gt;&lt;h2 id=&quot;第八章-关联性和聚合性&quot;&gt;&lt;a href=&quot;#第八章-关联性和聚合性&quot; class=&quot;headerlink&quot; title=&quot;第八章 关联性和聚合性&quot;&gt;&lt;/a&gt;第八章 关联性和聚合性&lt;/h2&gt;&lt;p&gt;&amp;emsp;爱因斯坦综合征：认为所有科学的进步都符合“飞跃”模式，就像爱因斯坦对物理学做出的贡献一样。&lt;/p&gt;
@@ -288,7 +319,7 @@
     <link href="http://wazhb.com/2021/05/31/How-to-think-about-psychology-5-7/"/>
     <id>http://wazhb.com/2021/05/31/How-to-think-about-psychology-5-7/</id>
     <published>2021-05-31T08:58:54.000Z</published>
-    <updated>2026-07-07T02:52:23.582Z</updated>
+    <updated>2026-07-07T06:14:36.163Z</updated>
     
     
     <summary type="html">&lt;h1 id=&quot;这才是心理学（5-7）How-to-think-about-psychology&quot;&gt;&lt;a href=&quot;#这才是心理学（5-7）How-to-think-about-psychology&quot; class=&quot;headerlink&quot; title=&quot;这才是心理学（5-7）How to think about psychology&quot;&gt;&lt;/a&gt;这才是心理学（5-7）How to think about psychology&lt;/h1&gt;&lt;h2 id=&quot;第五章-相关性与因果关系问题&quot;&gt;&lt;a href=&quot;#第五章-相关性与因果关系问题&quot; class=&quot;headerlink&quot; title=&quot;第五章 相关性与因果关系问题&quot;&gt;&lt;/a&gt;第五章 相关性与因果关系问题&lt;/h2&gt;&lt;p&gt;&amp;emsp;本章主要向读者解释两个变量具有相关性并不表示这两个变量存在因果关系。&lt;/p&gt;
@@ -314,7 +345,7 @@
     <link href="http://wazhb.com/2021/05/28/How-to-think-about-psychology-3-4/"/>
     <id>http://wazhb.com/2021/05/28/How-to-think-about-psychology-3-4/</id>
     <published>2021-05-28T14:44:59.000Z</published>
-    <updated>2026-07-07T02:52:23.581Z</updated>
+    <updated>2026-07-07T06:14:36.163Z</updated>
     
     
     <summary type="html">&lt;h1 id=&quot;这才是心理学（2-3）How-to-think-about-psychology&quot;&gt;&lt;a href=&quot;#这才是心理学（2-3）How-to-think-about-psychology&quot; class=&quot;headerlink&quot; title=&quot;这才是心理学（2-3）How to think about psychology&quot;&gt;&lt;/a&gt;这才是心理学（2-3）How to think about psychology&lt;/h1&gt;&lt;h2 id=&quot;第三章-操作主义与本质主义&quot;&gt;&lt;a href=&quot;#第三章-操作主义与本质主义&quot; class=&quot;headerlink&quot; title=&quot;第三章 操作主义与本质主义&quot;&gt;&lt;/a&gt;第三章 操作主义与本质主义&lt;/h2&gt;&lt;p&gt;&amp;emsp;操作主义是指科学理论的概念必须以某种方式建立在可观察事件的基础之上，或与之相关联，而这种可观察时间是可以被测量的。&lt;/p&gt;
@@ -341,7 +372,7 @@
     <link href="http://wazhb.com/2021/05/27/How-to-think-about-psychology-1-2/"/>
     <id>http://wazhb.com/2021/05/27/How-to-think-about-psychology-1-2/</id>
     <published>2021-05-27T13:23:22.000Z</published>
-    <updated>2026-07-07T02:52:23.581Z</updated>
+    <updated>2026-07-07T06:14:36.163Z</updated>
     
     
     <summary type="html">&lt;h1 id=&quot;这才是心理学（1-2）How-to-think-about-psychology&quot;&gt;&lt;a href=&quot;#这才是心理学（1-2）How-to-think-about-psychology&quot; class=&quot;headerlink&quot; title=&quot;这才是心理学（1-2）How to think about psychology&quot;&gt;&lt;/a&gt;这才是心理学（1-2）How to think about psychology&lt;/h1&gt;&lt;h2 id=&quot;第一章-心理学介绍&quot;&gt;&lt;a href=&quot;#第一章-心理学介绍&quot; class=&quot;headerlink&quot; title=&quot;第一章 心理学介绍&quot;&gt;&lt;/a&gt;第一章 心理学介绍&lt;/h2&gt;&lt;p&gt;&amp;emsp;心理学作为一门科学，研究的是人类以及动物的行为，并且依据研究对行为做出预测。作者认为心理学和其他科学一样，是基于数据的科学的研究，但是心理学相对于其他科学如物理学、化学等，是一门较为“年轻”的学科。&lt;/p&gt;

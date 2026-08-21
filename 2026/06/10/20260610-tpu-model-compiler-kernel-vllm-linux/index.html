@@ -29,7 +29,7 @@
 <meta property="og:description" content="最近在梳理大模型基础设施的系统分层图：大模型、深度学习框架、Tensor、算子、算子内核、DLC&#x2F;编译器、vLLM、TPU Runtime、Linux 内核和 TPU 硬件分别处在哪一层，各自解决什么问题。 这篇文章试图用更工程化的方式回答这个问题。最核心的关系是：大模型定义计算目标，框架表达计算图，算子定义数学语义，算子内核定义硬件实现，编译器&#x2F;DLC 生成目标硬件可执行产物，vLLM 管理在线">
 <meta property="og:locale">
 <meta property="article:published_time" content="2026-06-09T16:00:00.000Z">
-<meta property="article:modified_time" content="2026-07-07T02:52:23.580Z">
+<meta property="article:modified_time" content="2026-07-07T06:14:36.162Z">
 <meta property="article:author" content="zzz">
 <meta property="article:tag" content="TPU">
 <meta property="article:tag" content="LLM">
@@ -96,9 +96,9 @@
   <ul class="main-menu menu">
         <li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>Home</a></li>
         <li class="menu-item menu-item-about"><a href="/about/" rel="section"><i class="fa fa-user fa-fw"></i>About</a></li>
-        <li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>Tags<span class="badge">20</span></a></li>
+        <li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>Tags<span class="badge">25</span></a></li>
         <li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>Categories<span class="badge">10</span></a></li>
-        <li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>Archives<span class="badge">11</span></a></li>
+        <li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>Archives<span class="badge">12</span></a></li>
       <li class="menu-item menu-item-search">
         <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>Search
         </a>
@@ -171,7 +171,7 @@
       <div class="site-state-item site-state-posts">
           <a href="/archives/">
         
-          <span class="site-state-item-count">11</span>
+          <span class="site-state-item-count">12</span>
           <span class="site-state-item-name">posts</span>
         </a>
       </div>
@@ -184,7 +184,7 @@
       <div class="site-state-item site-state-tags">
             <a href="/tags/">
           
-        <span class="site-state-item-count">20</span>
+        <span class="site-state-item-count">25</span>
         <span class="site-state-item-name">tags</span></a>
       </div>
   </nav>
@@ -266,7 +266,7 @@
           <i class="far fa-calendar-check"></i>
         </span>
         <span class="post-meta-item-text">Edited on</span>
-        <time title="Modified: 2026-07-07 10:52:23" itemprop="dateModified" datetime="2026-07-07T10:52:23+08:00">2026-07-07</time>
+        <time title="Modified: 2026-07-07 14:14:36" itemprop="dateModified" datetime="2026-07-07T14:14:36+08:00">2026-07-07</time>
       </span>
     <span class="post-meta-item">
       <span class="post-meta-item-icon">
