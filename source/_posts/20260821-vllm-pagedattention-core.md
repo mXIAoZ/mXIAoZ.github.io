@@ -25,11 +25,13 @@ vLLM 的核心贡献之一，是把操作系统分页思想引入 KV Cache 管�
 
 自回归生成每前进一步，都要读取历史 token 的 K/V，并把当前 token 的 K/V 追加到缓存。忽略量化、对齐和并行切分后，每个 token 的 KV Cache 大小近似为：
 
-$$
+<div class="math-display">
+\[
 \text{KV bytes/token}
 =2\times N_{layers}\times N_{kv\_heads}\times d_{head}
 \times \text{bytes(dtype)}
-$$
+\]
+</div>
 
 例如，32 层、8 个 KV heads、`head_dim=128`、BF16 时，每个 token 约占 128 KiB；单个 32K 上下文约占 4 GiB。这个数值只对应上述模型形状，不能直接推广到其他模型。
 
@@ -55,13 +57,15 @@ PagedAttention 解决的是 KV 的**存储、寻址和生命周期**；FlashAtte
 
 多 token self-attention，特别是 Prefill，通常写成：
 
-$$
+<div class="math-display">
+\[
 S=QK^T,\qquad P=\operatorname{softmax}(S),\qquad O=PV
-$$
+\]
+</div>
 
-如果先完整计算 `S`、写回 HBM，再读出计算 `P`；随后再次写回、读出 `P` 计算 `O`，两个 $n\times n$ 中间矩阵会产生大量 HBM 流量，临时显存也随序列长度按 $O(n^2)$ 增长。
+如果先完整计算 `S`、写回 HBM，再读出计算 `P`；随后再次写回、读出 `P` 计算 `O`，两个 \\(n\times n\\) 中间矩阵会产生大量 HBM 流量，临时显存也随序列长度按 \\(O(n^2)\\) 增长。
 
-这里必须区分 Prefill 与单 token Decode：Prefill 有多行 Query，完整 score 矩阵可能很大；Decode 通常只有一行 Query，单步 score 和 KV 读取随当前上下文近似按 $O(n)$ 增长。FlashAttention 的收益大小因此取决于 Query 长度、head size、dtype、GPU 和 kernel 实现，不能用固定倍率概括。
+这里必须区分 Prefill 与单 token Decode：Prefill 有多行 Query，完整 score 矩阵可能很大；Decode 通常只有一行 Query，单步 score 和 KV 读取随当前上下文近似按 \\(O(n)\\) 增长。FlashAttention 的收益大小因此取决于 Query 长度、head size、dtype、GPU 和 kernel 实现，不能用固定倍率概括。
 
 FlashAttention 的关键不是减少数学运算，而是使用 IO-aware tiling：
 
@@ -74,26 +78,32 @@ FlashAttention 的关键不是减少数学运算，而是使用 IO-aware tiling�
 
 ### 2.2 Online Softmax 算法
 
-设已经处理过一部分 K/V tiles，并保存状态 $(m,l,A)$：
+设已经处理过一部分 K/V tiles，并保存状态 \\((m,l,A)\\)：
 
 - `m`：当前行已经见过的最大 score；
 - `l`：在最大值基准下的指数和；
 - `A`：尚未除以 `l` 的输出累加器。
 
-对新的 score tile $S_j$ 和 Value tile $V_j$，稳定合并公式为：
+对新的 score tile \\(S_j\\) 和 Value tile \\(V_j\\)，稳定合并公式为：
 
-$$
+<div class="math-display">
+\[
 m'=\max(m,\max S_j)
-$$
+\]
+</div>
 
-$$
+<div class="math-display">
+\[
 l'=e^{m-m'}l+\sum e^{S_j-m'}
-$$
+\]
+</div>
 
-$$
+<div class="math-display">
+\[
 A'=e^{m-m'}A+\sum e^{S_j-m'}V_j,
 \qquad O=A'/l'
-$$
+\]
+</div>
 
 每次更新都先把旧状态缩放到新的最大值基准，因此不会因为 score 很大而直接计算 `exp(score)`。遍历完全部 K/V tiles 后，得到的结果与普通 softmax 等价。
 
@@ -114,20 +124,26 @@ Tile 结束后，当前 `S/P/K/V` tile buffer 可以复用，但 HBM 中的 K/V 
 
 PagedAttention 把 KV Cache 切成固定 token 数的物理块，只在序列增长时按需分配。设 block size 为 `B`，请求内 token 位置为 `t`：
 
-$$
+<div class="math-display">
+\[
 logical\_block=\left\lfloor\frac{t}{B}\right\rfloor,
 \qquad offset=t\bmod B
-$$
+\]
+</div>
 
-$$
+<div class="math-display">
+\[
 physical\_block=block\_table[request][logical\_block]
-$$
+\]
+</div>
 
 在最简单的单 KV Cache group、单 DCP rank 情况下：
 
-$$
+<div class="math-display">
+\[
 slot=physical\_block\times B+offset
-$$
+\]
+</div>
 
 ![PagedAttention 地址翻译](/images/vllm-pagedattention-core/01_address_translation.svg)
 
@@ -399,14 +415,18 @@ paged_attention_v2_reduce_kernel:
 
 该片段从最大值广播后的中间位置开始。完整 reduce kernel 会先求所有 partitions 的全局最大值，再把局部指数和缩放到同一基准：
 
-$$
+<div class="math-display">
+\[
 m=\max_j m_j,
 \qquad L=\sum_j l_j e^{m_j-m}
-$$
+\]
+</div>
 
-$$
+<div class="math-display">
+\[
 O=\sum_j O_j\frac{l_j e^{m_j-m}}{L}
-$$
+\]
+</div>
 
 最后还会按相同权重合并 `tmp_out`。这属于跨 partition 的稳定归并，不是 FlashAttention 跨 K/V tile 的完整 online-softmax 流程。
 
@@ -448,9 +468,11 @@ PagedAttention 解决“一个逻辑块放在哪里”；Prefix Caching 进一�
 
 vLLM 为完整 token block 构造链式 hash：
 
-$$
+<div class="math-display">
+\[
 H_i=H(H_{i-1},\ token\_ids_i,\ extra\_keys_i)
-$$
+\]
+</div>
 
 > 以下教学片段省略了完整函数签名、类型上下文和函数定义末尾的冒号，不能直接运行；vLLM `v0.11.0` 的完整实现见 [`kv_cache_utils.py:L547-L573`](https://github.com/vllm-project/vllm/blob/v0.11.0/vllm/v1/core/kv_cache_utils.py#L547-L573)。
 
