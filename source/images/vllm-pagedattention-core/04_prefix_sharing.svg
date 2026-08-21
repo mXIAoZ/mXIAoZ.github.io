@@ -1,0 +1,92 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="590" viewBox="0 0 1200 590" role="img" aria-labelledby="prefix-title prefix-desc">
+  <title id="prefix-title">Prefix Caching：完整公共前缀共享，分叉后使用私有块</title>
+  <desc id="prefix-desc">图示假设 B0 与 B1 已由较早请求计算并提交；后续 Request A 和 B 命中后共享这两个完整前缀块，对应物理块 7 和 2。vLLM v0.11.0 在 cache insertion 时不做去重，因此同轮首次生成相同块不保证立即共享。hash 链分叉后，A 和 B 分别使用物理块 11 和 5；未满尾块不提交到 Prefix Cache。</desc>
+  <defs>
+    <marker id="prefix-kv-arrow" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto">
+      <path d="M0 0L9 4.5 0 9Z" fill="#0F766E"/>
+    </marker>
+    <marker id="prefix-meta-arrow" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto">
+      <path d="M0 0L9 4.5 0 9Z" fill="#2563EB"/>
+    </marker>
+    <style>
+      text{font-family:"Noto Sans SC","PingFang SC",system-ui,sans-serif;fill:#0F172A}
+      .title{font-size:28px;font-weight:700}
+      .subtitle{font-size:18px;fill:#475569}
+      .section{font-size:17px;font-weight:700;letter-spacing:.8px;fill:#475569}
+      .label{font-size:18px;font-weight:600}
+      .body{font-size:18px}
+      .note{font-size:17px;fill:#475569}
+      .mono{font-family:"SFMono-Regular",Menlo,Consolas,monospace}
+      .shared{fill:#ECFDF5;stroke:#0F766E;stroke-width:1.9}
+      .private{fill:#F8FAFC;stroke:#64748B;stroke-width:1.6}
+      .meta{fill:#EFF6FF;stroke:#2563EB;stroke-width:1.7;stroke-dasharray:7 6}
+      .tail{fill:#FFFBEB;stroke:#D97706;stroke-width:1.9;stroke-dasharray:7 5}
+      .kv-line{fill:none;stroke:#0F766E;stroke-width:2.5;marker-end:url(#prefix-kv-arrow)}
+      .meta-line{fill:none;stroke:#2563EB;stroke-width:2;stroke-dasharray:7 6;marker-end:url(#prefix-meta-arrow)}
+      .rule{stroke:#CBD5E1;stroke-width:1.2}
+    </style>
+  </defs>
+
+  <rect width="1200" height="590" fill="#FFFFFF"/>
+  <text class="title" x="48" y="44">只有完整且 hash 链一致的公共前缀块可以共享</text>
+  <text class="subtitle" x="48" y="76">图示前提：B0、B1 已由较早请求提交；后续请求命中后共享，分叉后各自继续。</text>
+  <line class="rule" x1="48" y1="96" x2="1152" y2="96"/>
+
+  <text class="section" x="48" y="126">REQUEST PATHS · TOKEN BLOCK + HASH + PHYSICAL BLOCK</text>
+  <text class="label" x="48" y="177">Request A</text>
+  <text class="label" x="48" y="225">Request B</text>
+  <path class="kv-line" d="M146 171H180V196H214"/>
+  <path class="kv-line" d="M146 219H180V196"/>
+
+  <rect class="shared" x="220" y="142" width="214" height="108" rx="7"/>
+  <text class="label" x="327" y="166" text-anchor="middle">完整块 B0</text>
+  <text class="note mono" x="327" y="190" text-anchor="middle">H0 = H(∅,B0,extra)</text>
+  <text class="note mono" x="327" y="214" text-anchor="middle">physical 7</text>
+  <text class="body mono" x="327" y="239" text-anchor="middle">ref_cnt=2</text>
+
+  <path class="kv-line" d="M434 196H474"/>
+  <rect class="shared" x="480" y="142" width="214" height="108" rx="7"/>
+  <text class="label" x="587" y="166" text-anchor="middle">完整块 B1</text>
+  <text class="note mono" x="587" y="190" text-anchor="middle">H1 = H(H0,B1,extra)</text>
+  <text class="note mono" x="587" y="214" text-anchor="middle">physical 2</text>
+  <text class="body mono" x="587" y="239" text-anchor="middle">ref_cnt=2</text>
+
+  <path class="kv-line" d="M694 196H720V151H744"/>
+  <path class="kv-line" d="M720 196V327H744"/>
+
+  <rect class="private" x="750" y="108" width="188" height="108" rx="7"/>
+  <text class="label" x="844" y="132" text-anchor="middle">A 的完整块 A2</text>
+  <text class="note mono" x="844" y="156" text-anchor="middle">HA2 = H(H1,A2)</text>
+  <text class="note mono" x="844" y="180" text-anchor="middle">physical 11</text>
+  <text class="body mono" x="844" y="205" text-anchor="middle">ref_cnt=1</text>
+
+  <rect class="private" x="750" y="284" width="188" height="108" rx="7"/>
+  <text class="label" x="844" y="308" text-anchor="middle">B 的完整块 B2</text>
+  <text class="note mono" x="844" y="332" text-anchor="middle">HB2 = H(H1,B2)</text>
+  <text class="note mono" x="844" y="356" text-anchor="middle">physical 5</text>
+  <text class="body mono" x="844" y="381" text-anchor="middle">ref_cnt=1</text>
+
+  <path class="kv-line" d="M938 162H964"/>
+  <path class="kv-line" d="M938 338H964"/>
+  <rect class="tail" x="970" y="108" width="182" height="108" rx="7"/>
+  <text class="label" x="1061" y="137" text-anchor="middle">A 的未满尾块</text>
+  <text class="body mono" x="1061" y="166" text-anchor="middle">6 / 16 tokens</text>
+  <text class="note" x="1061" y="195" text-anchor="middle" fill="#92400E">本轮写入 · 不提交</text>
+
+  <rect class="tail" x="970" y="284" width="182" height="108" rx="7"/>
+  <text class="label" x="1061" y="313" text-anchor="middle">B 的未满尾块</text>
+  <text class="body mono" x="1061" y="342" text-anchor="middle">9 / 16 tokens</text>
+  <text class="note" x="1061" y="371" text-anchor="middle" fill="#92400E">本轮写入 · 不提交</text>
+
+  <text class="section" x="48" y="438">两个请求的 BLOCK TABLE</text>
+  <rect class="meta" x="270" y="412" width="318" height="58" rx="7"/>
+  <text class="body mono" x="429" y="448" text-anchor="middle">A → [7, 2, 11, …]</text>
+  <rect class="meta" x="654" y="412" width="318" height="58" rx="7"/>
+  <text class="body mono" x="813" y="448" text-anchor="middle">B → [7, 2, 5, …]</text>
+  <path class="meta-line" d="M587 250V386H429V406"/>
+  <path class="meta-line" d="M587 250V386H813V406"/>
+
+  <line class="rule" x1="48" y1="510" x2="1152" y2="510"/>
+  <text class="note" x="48" y="540">共享发生在后续 cache lookup；同轮首次生成相同完整块不保证立即去重，分叉后也不能越过 parent hash 命中。</text>
+  <text class="note" x="48" y="570">未满尾块仍可保存当前请求的 KV，但不会作为完整 Prefix Cache block 提交与共享。</text>
+</svg>

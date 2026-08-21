@@ -1,0 +1,81 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="650" viewBox="0 0 1200 650" role="img" aria-labelledby="fa-title fa-desc">
+  <title id="fa-title">FlashAttention tile 计算与 online softmax 状态更新</title>
+  <desc id="fa-desc">Query tile 常驻片上存储，Key 和 Value tiles 依次流入。每次计算局部 score tile，更新最大值 m、指数和 l 与未归一化输出累加器 A，然后释放当前 score、probability、Key 和 Value tile，最终输出 O 等于 A 除以 l。完整 S 和 P 不写回 HBM。</desc>
+  <defs>
+    <marker id="fa-arrow" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto">
+      <path d="M0 0L9 4.5 0 9Z" fill="#2563EB"/>
+    </marker>
+    <style>
+      text{font-family:"Noto Sans SC","PingFang SC",system-ui,sans-serif;fill:#0F172A}
+      .title{font-size:28px;font-weight:700}.subtitle{font-size:18px;fill:#475569}
+      .section{font-size:16px;font-weight:700;letter-spacing:.8px;fill:#475569}
+      .label{font-size:18px;font-weight:650}.body{font-size:17px}.note{font-size:16px;fill:#475569}
+      .mono{font-family:"SFMono-Regular",Menlo,Consolas,monospace}
+      .hbm{fill:#F8FAFC;stroke:#64748B;stroke-width:1.6}.tile{fill:#EFF6FF;stroke:#2563EB;stroke-width:1.8}
+      .state{fill:#ECFDF5;stroke:#0F766E;stroke-width:1.8}.temp{fill:#FFFBEB;stroke:#D97706;stroke-width:1.8}
+      .result{fill:#F5F3FF;stroke:#7C3AED;stroke-width:1.8}.line{fill:none;stroke:#2563EB;stroke-width:2;marker-end:url(#fa-arrow)}
+      .dash{fill:none;stroke:#D97706;stroke-width:1.8;stroke-dasharray:7 6;marker-end:url(#fa-arrow)}
+      .rule{stroke:#CBD5E1;stroke-width:1.2}
+    </style>
+  </defs>
+  <rect width="1200" height="650" fill="#FFFFFF"/>
+  <text class="title" x="48" y="44">FlashAttention：流式读取 K/V tile，持续更新 (m, l, A)</text>
+  <text class="subtitle" x="48" y="76">目标不是减少 Attention 数学工作，而是避免把完整 S、P 中间矩阵写入并重新读取 HBM。</text>
+  <line class="rule" x1="48" y1="96" x2="1152" y2="96"/>
+
+  <text class="section" x="48" y="128">HBM</text>
+  <rect class="hbm" x="48" y="148" width="210" height="68" rx="8"/>
+  <text class="label mono" x="153" y="178" text-anchor="middle">Q_i [Br, d]</text>
+  <text class="note" x="153" y="202" text-anchor="middle">当前 Query tile</text>
+  <rect class="hbm" x="48" y="246" width="210" height="68" rx="8"/>
+  <text class="label mono" x="153" y="276" text-anchor="middle">K_j [Bc, d]</text>
+  <text class="note" x="153" y="300" text-anchor="middle">第 j 个 Key tile</text>
+  <rect class="hbm" x="48" y="344" width="210" height="68" rx="8"/>
+  <text class="label mono" x="153" y="374" text-anchor="middle">V_j [Bc, d]</text>
+  <text class="note" x="153" y="398" text-anchor="middle">第 j 个 Value tile</text>
+
+  <text class="section" x="328" y="128">片上工作集</text>
+  <rect class="tile" x="328" y="148" width="250" height="68" rx="8"/>
+  <text class="label" x="453" y="178" text-anchor="middle">加载并复用 Q_i</text>
+  <text class="note mono" x="453" y="202" text-anchor="middle">CTA(request, head, q_tile)</text>
+  <rect class="temp" x="328" y="246" width="250" height="68" rx="8"/>
+  <text class="label mono" x="453" y="276" text-anchor="middle">S_ij = Q_i K_j^T</text>
+  <text class="note" x="453" y="300" text-anchor="middle">仅保留当前 score tile</text>
+  <rect class="temp" x="328" y="344" width="250" height="68" rx="8"/>
+  <text class="label mono" x="453" y="374" text-anchor="middle">P_ij · V_j</text>
+  <text class="note" x="453" y="398" text-anchor="middle">局部输出贡献</text>
+
+  <text class="section" x="652" y="128">跨 tile 持久状态</text>
+  <rect class="state" x="652" y="148" width="300" height="264" rx="10"/>
+  <text class="label" x="802" y="180" text-anchor="middle">Online Softmax merge</text>
+  <text class="body mono" x="682" y="224">m' = max(m, max(S_ij))</text>
+  <text class="body mono" x="682" y="270">l' = exp(m-m')l</text>
+  <text class="body mono" x="714" y="296">+ Σ exp(S_ij-m')</text>
+  <text class="body mono" x="682" y="342">A' = exp(m-m')A</text>
+  <text class="body mono" x="714" y="368">+ Σ exp(S_ij-m')V_j</text>
+  <text class="note" x="802" y="398" text-anchor="middle">只让 (m, l, A) 跨 K/V tiles 存活</text>
+
+  <path class="line" d="M258 182H322"/>
+  <path class="line" d="M258 280H322"/>
+  <path class="line" d="M258 378H322"/>
+  <path class="line" d="M578 280H646"/>
+  <path class="line" d="M578 378H646"/>
+
+  <path class="dash" d="M802 412V454H453V420"/>
+  <text class="note" x="620" y="448" text-anchor="middle">j ← j + 1，加载下一组 K_j / V_j</text>
+
+  <rect class="result" x="998" y="226" width="154" height="108" rx="9"/>
+  <text class="label mono" x="1075" y="266" text-anchor="middle">O_i = A / l</text>
+  <text class="note" x="1075" y="296" text-anchor="middle">写回 HBM</text>
+  <path class="line" d="M952 280H992"/>
+
+  <line class="rule" x1="48" y1="492" x2="1152" y2="492"/>
+  <text class="section" x="48" y="526">TILE 结束后的数据生命周期</text>
+  <rect class="state" x="48" y="546" width="326" height="54" rx="7"/>
+  <text class="body" x="211" y="579" text-anchor="middle">保留：Q_i、m、l、A</text>
+  <rect class="temp" x="406" y="546" width="430" height="54" rx="7"/>
+  <text class="body" x="621" y="579" text-anchor="middle">释放/复用：S_ij、P_ij、K_j、V_j buffer</text>
+  <rect class="hbm" x="868" y="546" width="284" height="54" rx="7"/>
+  <text class="body" x="1010" y="579" text-anchor="middle">HBM 中的 K/V 数据仍然存在</text>
+  <text class="note" x="48" y="632">Br、Bc 由片上容量、寄存器、dtype、双缓冲、矩阵指令形状与 occupancy 共同约束，不能只按一个容量数字决定。</text>
+</svg>
