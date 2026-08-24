@@ -13,6 +13,8 @@ categories:
   - AI Infra
   - vLLM
 mathjax: true
+toc:
+  number: false
 ---
 
 # vLLM 深度解析（二）：PagedAttention 核心机制
